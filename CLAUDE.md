@@ -1,11 +1,11 @@
-# Lápiz Verde (repo antescorregIA) — Contexto del proyecto
+# Lápiz Verde — Contexto del proyecto
 
 ## Qué es
 App web para corrección automática de tareas de alumnos de Primaria y ESO con IA (Claude API).
 Empezó como herramienta personal de un profesor; se está convirtiendo en producto de pago para profesores (bonos de correcciones). Plan completo en ROADMAP.md.
 
 ## Estructura
-antescorregIA/
+lapiz-verde/
 ├── index.html            ← frontend completo (en la raíz, NO mover)
 ├── privacidad.html       ← privacidad y aviso legal (borrador con [HUECOS])
 ├── api/                  ← funciones de Vercel: corregir, rubrica, checkout, stripe-webhook, enviar-feedback

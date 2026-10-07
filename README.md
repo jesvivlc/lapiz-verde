@@ -1,6 +1,6 @@
 # Lápiz Verde
 
-(Repositorio `antescorregIA`: nombre interno antiguo del proyecto.)
+Repositorio: https://github.com/jesvivlc/lapiz-verde (antes `antescorregIA`).
 
 Corrección de tareas escolares (Primaria y ESO) con IA. El profesor sube las entregas de su clase, recibe una propuesta de nota y feedback por alumno, la revisa, la aprueba y la nota va a su cuaderno.
 
