@@ -24,7 +24,7 @@ antescorregIA/
 - IA: `claude-sonnet-5` (elegido por coste; ver ROADMAP)
 - Base de datos y login: Supabase (Auth con enlace mágico, RLS activada)
 - Pagos: Stripe Checkout (bonos 100 / 500). Correo: Resend desde el servidor
-- Deploy: Vercel → https://antescorregia.vercel.app
+- Deploy: Vercel (proyecto `antescorregia`) → https://lapizverde.com (dominio comprado el 7/10/2026; DNS en el registrador)
 
 ## Supabase — tablas
 - `grupos` (id, owner_id, nombre, nivel, anio_academico, created_at)

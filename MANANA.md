@@ -7,6 +7,23 @@ Hazlo **en este orden**. Algunos pasos rompen producción si se hacen antes que 
 
 ---
 
+## 0. Conectar lapizverde.com (10 min de clics + hasta unas horas de espera)
+
+Hazlo ya, aunque todavía no publiques: el DNS y el certificado tardan en estar listos, y así no hay que esperar luego.
+Mientras no fusiones la rama, lapizverde.com mostrará la versión antigua; no pasa nada, nadie conoce aún la dirección.
+
+**En Vercel** → proyecto antescorregia → Settings → **Domains**:
+1. Add → `lapizverde.com` → elige que sea el dominio principal.
+2. Add → `www.lapizverde.com` → que **redirija** a `lapizverde.com`.
+3. Vercel te enseñará los registros DNS que necesita. Apúntalos tal cual: suelen ser un registro **A** para `@` y un **CNAME** para `www`, pero usa los valores exactos que te dé.
+
+**En DonDominio** (o donde lo compraras) → lapizverde.com → **Zona DNS**:
+1. Borra los registros A y CNAME que vengan por defecto para `@` y `www` (los de "aparcado").
+2. Crea los dos que te ha dado Vercel.
+3. Vuelve a Vercel: cuando los dos dominios salgan en verde ("Valid Configuration"), ya está.
+
+> Si te lo compraste en otro sitio, el procedimiento es el mismo: buscar la "zona DNS" del dominio.
+
 ## 1. Mirar la versión de prueba (5 min)
 
 **https://antescorregia-git-fase-1-brunos-projects-94a4248c.vercel.app** (siempre apunta a lo último de la rama).
@@ -16,9 +33,10 @@ Está protegida con el login de Vercel: ábrela con la sesión de Vercel iniciad
 
 Panel de Supabase → **Authentication → URL Configuration**:
 
-- **Site URL**: `https://antescorregia.vercel.app`
+- **Site URL**: `https://lapizverde.com`
 - **Redirect URLs**, añade:
-  - `https://antescorregia.vercel.app/**`
+  - `https://lapizverde.com/**`
+  - `https://antescorregia.vercel.app/**` (por si entras por la dirección antigua)
   - `https://antescorregia-*-brunos-projects-94a4248c.vercel.app/**` (versiones de prueba)
 
 Y en **Authentication → Providers → Email**: que esté activado.
@@ -42,7 +60,7 @@ La migración activa la seguridad por usuario: a partir de ese momento, **la app
 
 1. En GitHub, fusiona `fase-1` en `main` (o `git checkout main && git merge fase-1 && git push`). Espera a que Vercel publique.
 2. Supabase → **SQL Editor** → pega `supabase/migrations/001_multiusuario.sql` entero → **Run**.
-3. Entra en https://antescorregia.vercel.app con tu correo y abre el enlace que te llega.
+3. Entra en https://lapizverde.com con tu correo y abre el enlace que te llega.
 4. Abre `supabase/migrations/002_asignar_datos_existentes.sql`, cambia `TU_EMAIL_AQUI` (sale dos veces: en el comentario y en la consulta) por tu correo, pégalo en el SQL Editor → **Run**. Esto te asigna tus grupos antiguos y te pone 1.000 correcciones.
 5. Recarga la app: deberías ver tus grupos en el Cuaderno.
 
@@ -55,14 +73,14 @@ La migración activa la seguridad por usuario: a partir de ese momento, **la app
 1. Crea un grupo en el Cuaderno (o usa uno tuyo), importa alumnos, crea una tarea.
 2. Corrige un ZIP pequeño (3-4 alumnos).
 3. **Las 20 fotos de libretas**: esta es la prueba de verdad. Mete fotos malas de libretas en un ZIP, con una carpeta por alumno, y córrelas. Mira qué pasa con la letra infantil. Las que no lea bien deberían salir marcadas con ⚠️ en lugar de inventadas.
-4. Aprueba algunas y comprueba que las notas aparecen en el Cuaderno (en azul claro = vienen del corrector).
+4. Aprueba algunas y comprueba que las notas aparecen en el Cuaderno (en verde claro = vienen del corrector).
 
 ## 6. Stripe (20 min, más la espera de activación)
 
-1. Crea la cuenta en https://dashboard.stripe.com y rellena los datos de activación (puede tardar un día).
+1. Crea la cuenta en https://dashboard.stripe.com y rellena los datos de activación (puede tardar un día). En Settings → Public details, pon como descriptor del extracto **LAPIZ VERDE** y como web `https://lapizverde.com`.
 2. Mientras tanto, en **modo prueba**: Developers → API keys → copia la `Secret key` (`sk_test_…`) → variable `STRIPE_SECRET_KEY` en Vercel.
 3. Developers → **Webhooks** → Add endpoint:
-   - URL: `https://antescorregia.vercel.app/api/stripe-webhook`
+   - URL: `https://lapizverde.com/api/stripe-webhook`
    - Eventos: `checkout.session.completed` y `checkout.session.async_payment_succeeded`
    - Copia el `Signing secret` (`whsec_…`) → variable `STRIPE_WEBHOOK_SECRET` en Vercel.
 4. Redespliega. Pulsa "Comprar" en la app y paga con la tarjeta de prueba `4242 4242 4242 4242` (cualquier fecha futura y CVC). Deberían sumarse 100 correcciones.
@@ -72,13 +90,14 @@ La migración activa la seguridad por usuario: a partir de ese momento, **la app
 
 Sin esto, el botón "Enviar" avisa y el profesor usa "Copiar". Para activarlo:
 
-1. En Resend, verifica un dominio tuyo (hace falta el dominio del producto).
-2. Variables en Vercel: `RESEND_API_KEY` y `FROM_EMAIL` (p. ej. `feedback@tudominio.es`).
+1. En Resend → Domains → Add → `lapizverde.com`. Te dará unos registros DNS (TXT y MX); créalos en la zona DNS de DonDominio, igual que en el paso 0. Con esto también puedes usar Resend como SMTP de Supabase (paso 2).
+2. Variables en Vercel: `RESEND_API_KEY` y `FROM_EMAIL` = `feedback@lapizverde.com`.
 
 ## 8. Antes de dejar entrar a desconocidos
 
 - [ ] Rellenar los `[HUECOS]` de `privacidad.html` (nombre, NIF, dirección, correo, región de Supabase) y que lo revise alguien que sepa de protección de datos.
-- [ ] Decidir nombre y dominio definitivos (neutro, sin "IA": ver ROADMAP).
+- [x] Nombre (Lápiz Verde) y dominio (lapizverde.com).
+- [ ] Comprobar la marca en la OEPM (clases 9, 41 y 42).
 - [ ] SMTP propio en Supabase (paso 2).
 - [ ] Si eres funcionario: autorización de compatibilidad antes de cobrar.
 
