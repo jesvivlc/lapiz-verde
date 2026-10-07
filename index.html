@@ -1459,7 +1459,7 @@
       </div>
       <div class="card-footer">
         <button class="btn btn-secondary btn-sm" onclick="copiarFeedback(${i})">📋 Copiar</button>
-        ${alumno.email ? `<button class="btn btn-secondary btn-sm" id="emailBtn-${i}" onclick="onSendEmail(${i}, this)">📧 Enviar</button>` : ''}
+        ${alumno.email && alumno.id ? `<button class="btn btn-secondary btn-sm" id="emailBtn-${i}" onclick="onSendEmail(${i}, this)">📧 Enviar</button>` : ''}
         ${puedeAprobar
           ? `<button class="btn btn-success btn-sm" id="aprobarBtn-${i}" onclick="aprobar(${i})" ${aprobada ? 'disabled' : ''}>${aprobada ? '✔ Guardada' : '✔ Aprobar y guardar'}</button>`
           : ''}
@@ -1517,11 +1517,9 @@
     btn.innerHTML = '<div class="btn-spinner"></div> Enviando…';
     try {
       await api('enviar-feedback', {
-        para: alumno.email,
-        nombre_alumno: alumno.nombre,
+        alumno_id: alumno.id,
         tarea: document.getElementById('nombreTarea').value.trim(),
         resultado: resultadoFinal(i),
-        firma: perfil?.nombre || '',
       });
       btn.innerHTML = '✅ Enviado';
       showToast(`Feedback enviado a ${alumno.nombre}`, 'success');

@@ -83,6 +83,13 @@ export default async function handler(req, res) {
       throw new ErrorHttp(400, `Faltan campos obligatorios: ${camposFaltantes.join(', ')}`);
     }
 
+    // Límites para que una sola corrección no cueste mucho más de lo que se cobra
+    const LIMITES = { nombre_alumno: 120, nombre_tarea: 200, rubrica: 6000, texto_tarea: 40000 };
+    const demasiadoLargo = Object.entries(LIMITES).find(([campo, max]) => String(body[campo] ?? '').length > max);
+    if (demasiadoLargo) {
+      throw new ErrorHttp(400, `El campo "${demasiadoLargo[0]}" es demasiado largo (máximo ${demasiadoLargo[1]} caracteres).`);
+    }
+
     const tieneTexto = texto_tarea && String(texto_tarea).trim() !== '';
     const tieneArchivo = archivo_base64 && String(archivo_base64).trim() !== '';
     if (!tieneTexto && !tieneArchivo) {

@@ -12,7 +12,7 @@ Hazlo **en este orden**. Algunos pasos rompen producción si se hacen antes que 
 Hazlo ya, aunque todavía no publiques: el DNS y el certificado tardan en estar listos, y así no hay que esperar luego.
 Mientras no fusiones la rama, lapizverde.com mostrará la versión antigua; no pasa nada, nadie conoce aún la dirección.
 
-**En Vercel** → proyecto antescorregia → Settings → **Domains**:
+**En Vercel** → proyecto lapiz-verde → Settings → **Domains**:
 1. Add → `lapizverde.com` → elige que sea el dominio principal.
 2. Add → `www.lapizverde.com` → que **redirija** a `lapizverde.com`.
 3. Vercel te enseñará los registros DNS que necesita. Apúntalos tal cual: suelen ser un registro **A** para `@` y un **CNAME** para `www`, pero usa los valores exactos que te dé.
@@ -26,7 +26,7 @@ Mientras no fusiones la rama, lapizverde.com mostrará la versión antigua; no p
 
 ## 1. Mirar la versión de prueba (5 min)
 
-**https://antescorregia-git-fase-1-brunos-projects-94a4248c.vercel.app** (siempre apunta a lo último de la rama).
+**https://lapiz-verde-git-fase-1-brunos-projects-94a4248c.vercel.app** (siempre apunta a lo último de la rama).
 Está protegida con el login de Vercel: ábrela con la sesión de Vercel iniciada en el navegador. Ahí verás la página de entrada nueva. **Todavía no podrás entrar ni corregir**: faltan los pasos 2-4.
 
 ## 2. Supabase: permitir el login (3 min)
@@ -45,7 +45,7 @@ Y en **Authentication → Providers → Email**: que esté activado.
 
 ## 3. Vercel: variables de entorno (5 min)
 
-Vercel → antescorregia → Settings → **Environment Variables**. Añade para Production y Preview:
+Vercel → lapiz-verde → Settings → **Environment Variables**. Añade para Production y Preview:
 
 | Variable | Dónde se saca |
 |---|---|

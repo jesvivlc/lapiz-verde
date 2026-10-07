@@ -1,10 +1,13 @@
 // Envía el feedback de una corrección al alumno desde el servidor (Resend).
 // El profesor ya no necesita clave propia: responde a su correo (reply-to).
+// El destinatario y la firma se leen de la base de datos (alumno propio y perfil),
+// nunca de la petición: así no sirve para mandar correos a cualquiera.
 import {
-  ErrorHttp, prepararRespuesta, registrarUso, responderError, usoReciente, usuarioDeLaPeticion,
+  ErrorHttp, prepararRespuesta, registrarUso, responderError, sbAdmin, usoReciente, usuarioDeLaPeticion,
 } from '../lib/servidor.js';
 
 const MAX_POR_HORA = 120;
+const corta = (txt, max) => String(txt ?? '').slice(0, max);
 const EMAIL_VALIDO = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 
 function esc(str) {
@@ -57,25 +60,49 @@ export default async function handler(req, res) {
       throw new ErrorHttp(503, 'El envío de correos todavía no está activado. Usa "Copiar feedback".', 'EMAIL_SIN_CONFIGURAR');
     }
 
-    const { para, nombre_alumno, tarea, resultado, firma } = req.body ?? {};
-    if (!para || !EMAIL_VALIDO.test(para)) throw new ErrorHttp(400, `Correo del alumno no válido: ${para || '(vacío)'}`);
-    if (!nombre_alumno || !tarea || !resultado || resultado.nota == null) {
+    const { alumno_id, tarea, resultado } = req.body ?? {};
+    if (!alumno_id || !tarea || !resultado || resultado.nota == null) {
       throw new ErrorHttp(400, 'Faltan datos de la corrección.');
     }
+    const nota = Number(resultado.nota);
+    if (!Number.isFinite(nota) || nota < 0 || nota > 10) throw new ErrorHttp(400, 'Nota no válida.');
+
+    const { data: alumno, error: errAlumno } = await sbAdmin().from('alumnos')
+      .select('nombre,email').eq('id', alumno_id).eq('owner_id', user.id).maybeSingle();
+    if (errAlumno) throw errAlumno;
+    if (!alumno) throw new ErrorHttp(404, 'Alumno no encontrado en tu cuaderno.');
+    if (!alumno.email || !EMAIL_VALIDO.test(alumno.email)) {
+      throw new ErrorHttp(400, `Correo del alumno no válido: ${alumno.email || '(vacío)'}`);
+    }
+
     if (await usoReciente(user.id, 'email', 60) >= MAX_POR_HORA) {
       throw new ErrorHttp(429, 'Has enviado muchos correos en la última hora. Inténtalo más tarde.');
     }
+    // Se apunta antes de enviar para que varias peticiones a la vez no se salten el límite
+    await registrarUso(user.id, 'email', null, null, true);
 
-    const nombreRemitente = String(firma || '').replace(/[<>"]/g, '').slice(0, 60);
+    const { data: perfil } = await sbAdmin().from('perfiles').select('nombre').eq('id', user.id).maybeSingle();
+    const firma = corta(perfil?.nombre, 60);
+    const nombreTarea = corta(tarea, 150);
+    const datos = {
+      nota,
+      nota_texto: corta(resultado.nota_texto, 40),
+      comentario: corta(resultado.comentario, 4000),
+      propuestas_mejora: (Array.isArray(resultado.propuestas_mejora) ? resultado.propuestas_mejora : [])
+        .slice(0, 5).map((m) => corta(m, 600)),
+      mensaje_motivador: corta(resultado.mensaje_motivador, 600),
+    };
+
+    const nombreRemitente = firma.replace(/[<>"]/g, '');
     const resp = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         from: nombreRemitente ? `${nombreRemitente} <${process.env.FROM_EMAIL}>` : process.env.FROM_EMAIL,
-        to: para,
+        to: alumno.email,
         reply_to: user.email,
-        subject: `Feedback de tu tarea: ${String(tarea).slice(0, 120)}`,
-        html: construirEmailHtml({ nombre: nombre_alumno, tarea, resultado, firma }),
+        subject: `Feedback de tu tarea: ${nombreTarea}`,
+        html: construirEmailHtml({ nombre: alumno.nombre, tarea: nombreTarea, resultado: datos, firma }),
       }),
     });
     if (!resp.ok) {
@@ -84,7 +111,6 @@ export default async function handler(req, res) {
       throw new ErrorHttp(502, 'El servicio de correo rechazó el envío. Inténtalo de nuevo.');
     }
 
-    await registrarUso(user.id, 'email', null, null, true);
     return res.status(200).json({ enviado: true });
   } catch (error) {
     return responderError(res, error, 'enviar-feedback');

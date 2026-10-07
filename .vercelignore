@@ -1,0 +1,5 @@
+# Ficheros del repo que no deben publicarse en la web
+*.md
+supabase/
+tests/
+.env*

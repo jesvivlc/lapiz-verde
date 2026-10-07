@@ -38,6 +38,11 @@ globalThis.fetch = async (url, init = {}) => {
       content: [{ type: 'thinking', thinking: '', signature: 'x' }, { type: 'text', text: JSON.stringify(respuestaIA) }],
       usage: { input_tokens: 3000, output_tokens: 500, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } });
   }
+  if (url.includes('/rest/v1/alumnos')) {
+    // Solo existe el alumno a-1, del profesor user-1
+    return json(url.includes('id=eq.a-1') && url.includes('owner_id=eq.user-1') ? [{ nombre: 'Ana', email: 'ana@alumnos.es' }] : []);
+  }
+  if (url.includes('/rest/v1/perfiles')) return json([{ nombre: 'Bruno' }]);
   if (url.includes('api.resend.com')) { estado.resend++; estado.resendBody = body; return json({ id: 'e1' }); }
   throw new Error('URL no simulada: ' + url);
 };
@@ -93,6 +98,10 @@ reiniciar(); estado.creditos = 0; res = respuesta();
 await corregir(peticion({ body: { ...base, texto_tarea: 'x' } }), res);
 ok(res.statusCode === 402 && res.cuerpo.codigo === 'SIN_CREDITOS' && !estado.anthropicBody, 'sin créditos → 402 y no llama a la IA');
 
+reiniciar(); res = respuesta();
+await corregir(peticion({ body: { ...base, rubrica: 'x'.repeat(6001), texto_tarea: 'x' } }), res);
+ok(res.statusCode === 400 && estado.creditos === 5 && !estado.anthropicBody, 'rúbrica enorme → 400 sin cobrar ni llamar a la IA');
+
 reiniciar(); estado.anthropicStatus = 400; res = respuesta();
 await corregir(peticion({ body: { ...base, texto_tarea: 'x' } }), res);
 ok(res.statusCode === 400 && estado.creditos === 5, 'si la IA falla, devuelve el crédito');
@@ -120,15 +129,19 @@ ok(res.statusCode === 400 && !estado.pago, 'firma falsa → 400 y no acredita');
 console.log('== /api/enviar-feedback ==');
 const { default: enviar } = await import('../api/enviar-feedback.js');
 reiniciar(); res = respuesta();
-await enviar(peticion({ body: { para: 'a@b.es', nombre_alumno: 'Ana', tarea: 'T', resultado: respuestaIA } }), res);
+await enviar(peticion({ body: { alumno_id: 'a-1', tarea: 'T', resultado: respuestaIA } }), res);
 ok(res.statusCode === 503 && res.cuerpo.codigo === 'EMAIL_SIN_CONFIGURAR', 'sin Resend configurado → aviso claro');
 process.env.RESEND_API_KEY = 're_x'; process.env.FROM_EMAIL = 'feedback@dominio.es';
 reiniciar(); res = respuesta();
-await enviar(peticion({ body: { para: 'a@b.es', nombre_alumno: 'Ana', tarea: 'T', resultado: respuestaIA, firma: 'Bruno' } }), res);
-ok(res.statusCode === 200 && estado.resendBody.reply_to === 'profe@x.es' && estado.resendBody.from === 'Bruno <feedback@dominio.es>', 'envía con reply-to del profesor y su firma');
+await enviar(peticion({ body: { alumno_id: 'a-1', tarea: 'T', resultado: respuestaIA, para: 'victima@x.es', firma: 'Secretaría' } }), res);
+ok(res.statusCode === 200 && estado.resendBody.to === 'ana@alumnos.es' && estado.resendBody.reply_to === 'profe@x.es' && estado.resendBody.from === 'Bruno <feedback@dominio.es>',
+  'envía al correo del alumno guardado y con la firma del perfil (ignora "para" y "firma" de la petición)');
 reiniciar(); res = respuesta();
-await enviar(peticion({ body: { para: 'no-es-correo', nombre_alumno: 'Ana', tarea: 'T', resultado: respuestaIA } }), res);
-ok(res.statusCode === 400 && estado.resend === 0, 'correo inválido → 400');
+await enviar(peticion({ body: { alumno_id: 'alumno-de-otro', tarea: 'T', resultado: respuestaIA } }), res);
+ok(res.statusCode === 404 && estado.resend === 0, 'alumno de otro profesor → 404 y no envía');
+reiniciar(); res = respuesta();
+await enviar(peticion({ body: { alumno_id: 'a-1', tarea: 'T', resultado: { ...respuestaIA, nota: 99 } } }), res);
+ok(res.statusCode === 400 && estado.resend === 0, 'nota fuera de rango → 400');
 
 console.log('== /api/checkout ==');
 const { default: checkout } = await import('../api/checkout.js');

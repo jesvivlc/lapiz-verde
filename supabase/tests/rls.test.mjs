@@ -35,6 +35,11 @@ create view v_resumen_grupo as select g.id grupo_id, g.nombre grupo_nombre, g.ni
   (select avg(n.nota) from notas n join alumnos a on a.id=n.alumno_id where a.grupo_id=g.id) media_general from grupos g;
 create view v_media_alumno_evaluacion as select a.id alumno_id, t.evaluacion, avg(n.nota) media from notas n join alumnos a on a.id=n.alumno_id join tareas t on t.id=n.tarea_id group by 1,2;
 
+-- políticas abiertas de cuando la app no tenía login (la 001 debe quitarlas)
+alter table alumnos enable row level security;
+create policy "Enable read access for all users" on alumnos for select using (true);
+create policy "Permitir todo" on notas for all using (true) with check (true);
+
 -- datos que ya existían
 insert into grupos (id, nombre) values ('11111111-1111-1111-1111-111111111111', 'Grupo antiguo de Bruno');
 insert into alumnos (id, grupo_id, nombre) values ('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'Ana');
@@ -60,7 +65,11 @@ console.log('== Aislamiento ==');
 await db.exec(`set role anon;`);
 ok((await q(`select count(*)::int c from grupos`)).rows[0].c === 0, 'anónimo no ve grupos');
 ok((await q(`select count(*)::int c from v_resumen_grupo`)).rows[0].c === 0, 'anónimo no ve la vista');
+ok((await q(`select count(*)::int c from alumnos`)).rows[0].c === 0, 'anónimo no ve alumnos (política antigua abierta eliminada)');
+ok((await q(`select count(*)::int c from notas`)).rows[0].c === 0, 'anónimo no ve notas (política antigua abierta eliminada)');
+await expectErr(q(`truncate notas`), 'anónimo no puede vaciar tablas con TRUNCATE');
 await db.exec(`reset role;`);
+ok((await q(`select count(*)::int c from pg_policies where tablename in ('alumnos','notas') and policyname in ('Enable read access for all users','Permitir todo')`)).rows[0].c === 0, 'políticas antiguas borradas');
 
 await asUser(A, async () => {
   ok((await q(`select count(*)::int c from v_resumen_grupo`)).rows[0].c === 1, 'Bruno ve su grupo en la vista');

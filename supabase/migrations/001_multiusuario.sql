@@ -174,6 +174,26 @@ alter table public.alumnos enable row level security;
 alter table public.tareas  enable row level security;
 alter table public.notas   enable row level security;
 
+-- Borrar cualquier política anterior (p. ej. "Enable read access for all users"
+-- de cuando la app no tenía login). Las políticas permisivas se suman con OR:
+-- si quedara una abierta, anularía el aislamiento entre profesores.
+do $$
+declare p record;
+begin
+  for p in
+    select tablename, policyname from pg_policies
+    where schemaname = 'public'
+      and tablename in ('grupos', 'alumnos', 'tareas', 'notas')
+      and policyname not in ('grupos_propios', 'alumnos_propios', 'tareas_propias', 'notas_propias')
+  loop
+    execute format('drop policy %I on public.%I', p.policyname, p.tablename);
+  end loop;
+end $$;
+
+-- TRUNCATE no pasa por la RLS
+revoke truncate on public.grupos, public.alumnos, public.tareas, public.notas,
+  public.perfiles, public.pagos, public.uso_ia from anon, authenticated;
+
 drop policy if exists grupos_propios on public.grupos;
 create policy grupos_propios on public.grupos
   for all
