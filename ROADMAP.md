@@ -1,4 +1,4 @@
-# Roadmap — antescorregIA
+# Roadmap — Lápiz Verde
 
 Plan de producto derivado de las conversaciones de septiembre de 2026.
 Estado de cada punto: ✅ hecho · 🔧 hecho en la rama `fase-1`, pendiente de activar · ⬜ pendiente.
@@ -51,7 +51,9 @@ Medirlo en real: la tabla `uso_ia` guarda los tokens de cada corrección desde l
 | 🔧 | La rúbrica se guarda en la tarea y se reutiliza; botón "que la escriba la IA" | Quita la mayor fricción del alta |
 | 🔧 | Página de entrada para quien no ha iniciado sesión | |
 | 🔧 | Registro de uso (`uso_ia`) para medir coste real por corrección | |
-| ⬜ | Nombre y dominio definitivos, neutros, sin "IA" | Decisión de Bruno |
+| ✅ | Nombre: **Lápiz Verde** (guiño a "corregir en verde"; sin "IA"; vale para toda Latinoamérica) | Decidido el 7/10/2026 |
+| ⬜ | Comprobar la marca en la OEPM (clases 9, 41, 42) y comprar lapizverde.com y lapizverde.es | Bruno. Libres el 7/10/2026 |
+| ⬜ | Conectar el dominio en Vercel y en Supabase; descriptor "LAPIZ VERDE" en el extracto de Stripe | Tras comprar el dominio |
 | ⬜ | Política de privacidad y aviso legal | Antes de cobrar a desconocidos |
 
 ## Fase 2 — Cumplimiento como producto

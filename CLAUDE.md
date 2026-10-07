@@ -1,4 +1,4 @@
-# antescorregIA — Contexto del proyecto
+# Lápiz Verde (repo antescorregIA) — Contexto del proyecto
 
 ## Qué es
 App web para corrección automática de tareas de alumnos de Primaria y ESO con IA (Claude API).

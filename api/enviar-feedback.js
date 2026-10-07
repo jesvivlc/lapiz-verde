@@ -13,7 +13,7 @@ function esc(str) {
 
 function colorNota(nota) {
   if (nota >= 9) return '#D97706';
-  if (nota >= 7) return '#4F46E5';
+  if (nota >= 7) return '#15803D';
   if (nota >= 6) return '#0891B2';
   if (nota >= 5) return '#EA580C';
   return '#DC2626';
@@ -22,11 +22,11 @@ function colorNota(nota) {
 export function construirEmailHtml({ nombre, tarea, resultado: r, firma }) {
   const color = colorNota(Number(r.nota));
   const mejoras = (r.propuestas_mejora || []).map((m, i) =>
-    `<li style="margin-bottom:8px;padding:9px 14px;background:#F8FAFC;border-left:3px solid #6366F1;border-radius:6px;font-size:14px;">
+    `<li style="margin-bottom:8px;padding:9px 14px;background:#F8FAFC;border-left:3px solid #16A34A;border-radius:6px;font-size:14px;">
       <strong>${i + 1}.</strong> ${esc(m)}</li>`).join('');
   return `<!DOCTYPE html><html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F1F5F9;margin:0;padding:24px;">
     <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
-      <div style="background:linear-gradient(135deg,#4F46E5,#7C3AED);padding:32px 40px;color:white;">
+      <div style="background:linear-gradient(135deg,#15803D,#0F766E);padding:32px 40px;color:white;">
         <h1 style="margin:0;font-size:22px;font-weight:800;">Feedback de tu tarea</h1>
         <p style="margin:8px 0 0;opacity:.85;font-size:15px;">${esc(tarea)}</p>
       </div>
@@ -41,8 +41,8 @@ export function construirEmailHtml({ nombre, tarea, resultado: r, firma }) {
         <p style="color:#0F172A;line-height:1.8;margin-bottom:24px;font-size:14px;white-space:pre-line;">${esc(r.comentario)}</p>
         <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#64748B;margin-bottom:10px;">Para mejorar</h3>
         <ul style="list-style:none;padding:0;margin:0 0 24px;">${mejoras}</ul>
-        <div style="background:linear-gradient(135deg,#EEF2FF,#F5F3FF);border:1px solid #C7D2FE;border-radius:12px;padding:16px 20px;">
-          <p style="color:#4338CA;font-style:italic;margin:0;font-size:14px;line-height:1.7;">✨ ${esc(r.mensaje_motivador)}</p>
+        <div style="background:linear-gradient(135deg,#F0FDF4,#ECFDF5);border:1px solid #BBF7D0;border-radius:12px;padding:16px 20px;">
+          <p style="color:#166534;font-style:italic;margin:0;font-size:14px;line-height:1.7;">✨ ${esc(r.mensaje_motivador)}</p>
         </div>
         ${firma ? `<p style="margin-top:24px;color:#0F172A;font-size:14px;">${esc(firma)}</p>` : ''}
       </div>
