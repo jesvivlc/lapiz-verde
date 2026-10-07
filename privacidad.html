@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacidad — Lápiz Verde</title>
+  <!--
+    BORRADOR pendiente de revisión. Antes de cobrar a nadie:
+    1. Rellenar todo lo que está entre [CORCHETES].
+    2. Confirmar la región de Supabase (panel → Project Settings → General).
+    3. Que lo revise alguien con conocimientos de protección de datos.
+  -->
+  <style>
+    :root {
+      --text: #0F172A; --muted: #64748B; --bg: #F1F5F9; --surface: #FFFFFF; --primary: #15803D;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; margin: 0; }
+    main { max-width: 760px; margin: 0 auto; padding: 40px 16px 64px; }
+    article { background: var(--surface); border-radius: 16px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+    h1 { font-size: 28px; margin-top: 0; }
+    h2 { font-size: 18px; margin-top: 32px; }
+    p, li { font-size: 15px; }
+    a { color: var(--primary); }
+    .volver { display: inline-block; margin-bottom: 16px; font-size: 14px; }
+    .pendiente { background: #FEF3C7; padding: 0 4px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+<main>
+  <a class="volver" href="./">← Volver</a>
+  <article>
+    <h1>Política de privacidad</h1>
+    <p><em>Última actualización: <span class="pendiente">[FECHA]</span></em></p>
+
+    <h2>Quién es el responsable</h2>
+    <p><span class="pendiente">[NOMBRE Y APELLIDOS o RAZÓN SOCIAL]</span>, con NIF <span class="pendiente">[NIF]</span> y domicilio en <span class="pendiente">[DIRECCIÓN]</span>. Contacto: <span class="pendiente">[CORREO DE CONTACTO]</span>.</p>
+
+    <h2>Qué datos tratamos</h2>
+    <ul>
+      <li><strong>De ti, como docente:</strong> tu correo electrónico (para entrar), el nombre con el que firmas el feedback, tu saldo de correcciones y el historial de compras.</li>
+      <li><strong>De tus alumnos, porque tú los introduces:</strong> nombre, apellidos, correo si lo añades, las notas y los comentarios de corrección que apruebas. Solo tú puedes verlos.</li>
+      <li><strong>Los trabajos que subes para corregir:</strong> se envían al servicio de inteligencia artificial para generar la propuesta de corrección y <strong>no se guardan</strong> en nuestra base de datos. Solo se guarda la corrección que tú apruebas.</li>
+      <li><strong>Datos de uso:</strong> cuántas correcciones haces y su coste técnico, para facturar y mejorar el servicio.</li>
+    </ul>
+
+    <h2>Tu papel respecto a los datos de tus alumnos</h2>
+    <p>Respecto a los datos de tus alumnos, actuamos como <strong>encargado del tratamiento</strong>: los tratamos solo para prestarte el servicio y siguiendo tus instrucciones. Te corresponde asegurarte de que puedes usarlos con esta finalidad conforme a la normativa y a las indicaciones de tu centro. Recomendamos no incluir en los trabajos datos que no sean necesarios para corregirlos.</p>
+
+    <h2>Decisiones automatizadas</h2>
+    <p>La aplicación <strong>propone</strong> una nota y un comentario. Ninguna nota se guarda ni se comunica al alumno sin que el docente la revise y la apruebe expresamente, y el docente puede modificarla. No se toman decisiones basadas únicamente en un tratamiento automatizado.</p>
+
+    <h2>Con quién compartimos datos</h2>
+    <p>Usamos proveedores que tratan datos por cuenta nuestra:</p>
+    <ul>
+      <li><strong>Anthropic</strong> (corrección con IA). Recibe el trabajo del alumno, el nombre que aparece en él y tu rúbrica. Según sus condiciones comerciales, no usa los datos de la API para entrenar sus modelos. <a href="https://www.anthropic.com/legal/privacy" rel="noopener">Política de Anthropic</a>.</li>
+      <li><strong>Supabase</strong> (base de datos y acceso), región <span class="pendiente">[REGIÓN]</span>.</li>
+      <li><strong>Vercel</strong> (alojamiento de la web).</li>
+      <li><strong>Stripe</strong> (pagos). No vemos ni guardamos los datos de tu tarjeta.</li>
+      <li><strong>Resend</strong> (envío del feedback por correo, solo si lo usas).</li>
+    </ul>
+    <p>Algunos de estos proveedores pueden tratar datos fuera del Espacio Económico Europeo, con las garantías previstas en el RGPD (cláusulas contractuales tipo o decisiones de adecuación).</p>
+
+    <h2>Cuánto tiempo guardamos los datos</h2>
+    <p>Mientras mantengas tu cuenta. Puedes borrar grupos, alumnos y notas cuando quieras, y pedirnos que eliminemos tu cuenta y todos sus datos escribiendo a <span class="pendiente">[CORREO DE CONTACTO]</span>. Los datos de facturación se conservan el tiempo que exige la ley.</p>
+
+    <h2>Tus derechos</h2>
+    <p>Puedes pedir acceso, rectificación, supresión, oposición, limitación y portabilidad escribiendo a <span class="pendiente">[CORREO DE CONTACTO]</span>. Si crees que no hemos atendido bien tu solicitud, puedes reclamar ante la <a href="https://www.aepd.es" rel="noopener">Agencia Española de Protección de Datos</a>.</p>
+
+    <h2 id="aviso-legal">Aviso legal</h2>
+    <p>Titular: <span class="pendiente">[NOMBRE O RAZÓN SOCIAL]</span> · NIF <span class="pendiente">[NIF]</span> · <span class="pendiente">[DIRECCIÓN]</span> · <span class="pendiente">[CORREO DE CONTACTO]</span>.</p>
+    <p>Las correcciones son propuestas generadas automáticamente para ayudar al docente. La evaluación del alumnado es responsabilidad del docente, que debe revisar cada propuesta antes de aprobarla.</p>
+  </article>
+</main>
+</body>
+</html>

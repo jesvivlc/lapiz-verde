@@ -1,12 +1,21 @@
 {
-  "name": "antescorregIA",
+  "name": "lapiz-verde",
   "version": "1.0.0",
-  "description": "API REST para corrección automática de tareas de ESO con IA",
+  "description": "Corrección automática de tareas escolares con IA",
   "type": "module",
   "engines": {
-    "node": ">=18"
+    "node": "24.x"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.52.0"
+    "@anthropic-ai/sdk": "^0.128.0",
+    "@supabase/supabase-js": "^2.117.1",
+    "stripe": "^22.6.2"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8"
+  },
+  "scripts": {
+    "test:db": "node supabase/tests/rls.test.mjs",
+    "test": "node tests/api.test.mjs && node supabase/tests/rls.test.mjs"
   }
 }

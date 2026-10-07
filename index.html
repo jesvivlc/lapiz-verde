@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AntescorregIA — Corrector de tareas con IA</title>
+  <title>Lápiz Verde — Corrección de tareas</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --primary: #6366F1;
-      --primary-dark: #4F46E5;
-      --primary-light: #EEF2FF;
+      --primary: #16A34A;
+      --primary-dark: #15803D;
+      --primary-light: #F0FDF4;
       --success: #10B981;
       --warning: #F59E0B;
       --danger: #EF4444;
@@ -35,10 +35,10 @@
 
     /* ── Header ── */
     header {
-      background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+      background: linear-gradient(135deg, #15803D 0%, #0F766E 100%);
       color: white;
       padding: 20px 0;
-      box-shadow: 0 4px 20px rgba(79,70,229,.3);
+      box-shadow: 0 4px 20px rgba(21,128,61,.3);
     }
     .header-inner {
       max-width: 1100px;
@@ -131,7 +131,7 @@
     }
     input:focus, select:focus, textarea:focus {
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(99,102,241,.15);
+      box-shadow: 0 0 0 3px rgba(22,163,74,.15);
     }
     textarea { resize: vertical; min-height: 120px; }
 
@@ -181,7 +181,7 @@
       white-space: nowrap;
     }
     .btn-primary { background: var(--primary); color: white; }
-    .btn-primary:hover:not(:disabled) { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99,102,241,.4); }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(22,163,74,.4); }
     .btn-primary:disabled { opacity: .6; cursor: not-allowed; transform: none; box-shadow: none; }
     .btn-secondary { background: var(--bg); color: var(--text); border: 1.5px solid var(--border); }
     .btn-secondary:hover { background: var(--border); }
@@ -203,7 +203,7 @@
     .progress-bar-bg { background: var(--bg); border-radius: 100px; height: 8px; overflow: hidden; }
     .progress-bar-fill {
       height: 100%;
-      background: linear-gradient(90deg, var(--primary), #7C3AED);
+      background: linear-gradient(90deg, var(--primary), #0F766E);
       border-radius: 100px;
       transition: width .4s ease;
       min-width: 0%;
@@ -254,7 +254,7 @@
     .grade-num { font-size: 30px; font-weight: 900; line-height: 1; }
     .grade-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
     .g-sobresaliente { color: #D97706; }
-    .g-notable       { color: #4F46E5; }
+    .g-notable       { color: #15803D; }
     .g-bien          { color: #0891B2; }
     .g-suficiente    { color: #EA580C; }
     .g-insuficiente  { color: #DC2626; }
@@ -277,12 +277,12 @@
 
     .mensaje-box {
       padding: 12px 16px;
-      background: linear-gradient(135deg, #EEF2FF, #F5F3FF);
-      border: 1px solid #C7D2FE;
+      background: linear-gradient(135deg, #F0FDF4, #ECFDF5);
+      border: 1px solid #BBF7D0;
       border-radius: var(--radius-sm);
       font-size: 14px;
       font-style: italic;
-      color: #4338CA;
+      color: #166534;
       line-height: 1.7;
     }
 
@@ -337,10 +337,12 @@
       z-index: 9999;
       box-shadow: 0 8px 32px rgba(0,0,0,.2);
       transform: translateY(100px);
-      transition: transform .3s;
+      opacity: 0;
+      pointer-events: none;
+      transition: transform .3s, opacity .3s;
       max-width: 380px;
     }
-    .toast.show { transform: translateY(0); }
+    .toast.show { transform: translateY(0); opacity: 1; pointer-events: auto; }
     .toast.toast-success { background: var(--success); }
     .toast.toast-error   { background: var(--danger); }
     .toast.toast-warning { background: var(--warning); color: var(--text); }
@@ -495,6 +497,111 @@
     .cuaderno-loading { text-align: center; padding: 60px 24px; color: var(--text-muted); }
     .cuaderno-empty { text-align: center; padding: 60px 24px; color: var(--text-muted); font-size: 15px; }
 
+    /* ── Cabecera: usuario y créditos ── */
+    .header-user { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 13px; }
+    .header-user .user-email { opacity: .85; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .creditos-chip {
+      background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.3);
+      padding: 6px 12px; border-radius: 999px; font-weight: 700; white-space: nowrap;
+    }
+    .creditos-chip.bajo { background: #FEF3C7; color: #92400E; border-color: #FCD34D; }
+    .btn-header {
+      background: white; color: var(--primary-dark); border: none; padding: 7px 14px;
+      border-radius: 999px; font-weight: 700; font-size: 13px; cursor: pointer;
+    }
+    .btn-header.ghost { background: transparent; color: white; border: 1px solid rgba(255,255,255,.4); }
+
+    /* ── Avisos ── */
+    .banner {
+      background: #FFFBEB; border: 1px solid #FCD34D; color: #92400E;
+      border-radius: var(--radius-sm); padding: 12px 16px; font-size: 14px;
+    }
+    .banner.info { background: var(--primary-light); border-color: #BBF7D0; color: #166534; }
+
+    /* ── Selector grupo / tarea ── */
+    .destino-box {
+      grid-column: 1 / -1; background: var(--primary-light); border: 1px solid #BBF7D0;
+      border-radius: var(--radius-sm); padding: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    }
+    .destino-box .destino-hint { grid-column: 1 / -1; font-size: 13px; color: #166534; }
+    .rubrica-tools { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+    .rubrica-tools input { flex: 1; min-width: 200px; }
+
+    /* ── Tarjetas de revisión ── */
+    .student-card.card-atencion { border: 2px solid var(--warning); }
+    .student-card.aprobada { border: 2px solid var(--success); }
+    .atencion-badge {
+      display: inline-block; background: #FEF3C7; color: #92400E; font-size: 12px; font-weight: 700;
+      padding: 3px 10px; border-radius: 999px; margin: 0 24px 4px;
+    }
+    .nota-edit {
+      width: 64px; font-size: 22px; font-weight: 900; text-align: center; border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 4px; background: white; color: inherit;
+    }
+    .card-textarea {
+      width: 100%; min-height: 110px; font: inherit; font-size: 14px; line-height: 1.6; color: var(--text);
+      border: 1px solid transparent; border-radius: var(--radius-sm); padding: 6px 8px; resize: vertical; background: transparent;
+    }
+    .card-textarea:hover, .card-textarea:focus { border-color: var(--border); background: #FAFAFF; outline: none; }
+    .card-footer { flex-wrap: wrap; }
+
+    /* ── Modal ── */
+    .modal {
+      position: fixed; inset: 0; background: rgba(15,23,42,.5); display: flex;
+      align-items: center; justify-content: center; z-index: 1000; padding: 16px;
+    }
+    .modal-card {
+      background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-hover);
+      width: 100%; max-width: 480px; max-height: 90vh; overflow: auto; padding: 28px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    .modal-card h3 { font-size: 18px; }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+    .bonos { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .bono {
+      border: 2px solid var(--border); border-radius: var(--radius); padding: 18px; text-align: center;
+      cursor: pointer; background: white; font: inherit; transition: border-color .15s, transform .15s;
+    }
+    .bono:hover { border-color: var(--primary); transform: translateY(-2px); }
+    .bono .bono-precio { font-size: 28px; font-weight: 900; color: var(--primary-dark); }
+    .bono .bono-detalle { font-size: 13px; color: var(--text-muted); }
+
+    /* ── Celda de nota corregida con IA ── */
+    .input-nota.origen-ia { border-color: #BBF7D0; background: var(--primary-light); }
+
+    /* ── Página de entrada ── */
+    .landing { max-width: 1000px; margin: 0 auto; padding: 0 24px 64px; display: flex; flex-direction: column; gap: 56px; }
+    .hero { display: grid; grid-template-columns: 1.2fr 1fr; gap: 40px; align-items: center; padding-top: 48px; }
+    .hero h2 { font-size: 40px; line-height: 1.15; font-weight: 900; letter-spacing: -1px; }
+    .hero p.lead { font-size: 18px; color: var(--text-muted); margin-top: 16px; }
+    .login-card {
+      background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
+      padding: 28px; display: flex; flex-direction: column; gap: 12px;
+    }
+    .login-card h3 { font-size: 18px; }
+    .login-card .hint { font-size: 13px; color: var(--text-muted); }
+    .login-ok { background: #ECFDF5; border: 1px solid #A7F3D0; color: #065F46; border-radius: var(--radius-sm); padding: 14px; font-size: 14px; }
+    .seccion-titulo { font-size: 24px; font-weight: 800; margin-bottom: 20px; text-align: center; }
+    .pasos-grid, .precios-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .paso, .precio {
+      background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px;
+    }
+    .paso .paso-num {
+      width: 36px; height: 36px; border-radius: 50%; background: var(--primary-light); color: var(--primary-dark);
+      display: flex; align-items: center; justify-content: center; font-weight: 900; margin-bottom: 12px;
+    }
+    .paso h4, .precio h4 { font-size: 16px; margin-bottom: 6px; }
+    .paso p, .precio p { font-size: 14px; color: var(--text-muted); }
+    .precio { text-align: center; }
+    .precio .precio-num { font-size: 36px; font-weight: 900; color: var(--primary-dark); margin: 6px 0; }
+    .precio.destacado { border: 2px solid var(--primary); }
+    .faq { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+    .faq details { background: var(--surface); border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 16px 20px; }
+    .faq summary { font-weight: 700; cursor: pointer; }
+    .faq p { margin-top: 10px; color: var(--text-muted); font-size: 14px; }
+    .landing-footer { text-align: center; font-size: 13px; color: var(--text-muted); }
+    .landing-footer a { color: var(--text-muted); }
+
     /* ── Responsive ── */
     @media (max-width: 768px) {
       .form-grid, .config-grid { grid-template-columns: 1fr; }
@@ -502,25 +609,138 @@
       .form-footer { flex-direction: column; align-items: stretch; }
       .config-grid { grid-template-columns: 1fr; }
       .grupos-grid { grid-template-columns: 1fr; }
+      .hero, .pasos-grid, .precios-grid, .bonos, .destino-box { grid-template-columns: 1fr; }
+      .hero h2 { font-size: 30px; }
+      .header-inner { flex-wrap: wrap; }
+      .header-user { margin-left: 0; width: 100%; flex-wrap: wrap; }
+      .header-user .user-email { display: none; }
     }
   </style>
 </head>
 <body>
 
+<!-- ══════════════ ENTRADA (sin sesión) ══════════════ -->
+<div id="pantalla-entrada" class="hidden">
+  <header>
+    <div class="header-inner">
+      <div class="logo-icon">✏️</div>
+      <div class="logo-text">
+        <h1>Lápiz Verde</h1>
+        <p>Corrección de tareas para docentes</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="landing">
+    <section class="hero">
+      <div>
+        <h2>El feedback que no te da tiempo a escribir.</h2>
+        <p class="lead">Sube los trabajos de tu clase y cada alumno recibe una corrección detallada según tu rúbrica: nota, comentario y tres propuestas de mejora. Tú revisas, ajustas y firmas. Las notas van solas a tu cuaderno.</p>
+      </div>
+      <form class="login-card" id="formLogin">
+        <h3>Empieza gratis</h3>
+        <div class="form-group">
+          <label for="loginEmail">Tu correo</label>
+          <input type="email" id="loginEmail" required placeholder="nombre@correo.es" autocomplete="email">
+        </div>
+        <button class="btn btn-primary" type="submit" id="btnLogin">Entrar con mi correo</button>
+        <div class="hint">Te enviamos un enlace para entrar. Sin contraseñas. <strong>20 correcciones gratis</strong>, sin tarjeta.</div>
+        <div id="loginOk" class="login-ok hidden"></div>
+      </form>
+    </section>
+
+    <section>
+      <h3 class="seccion-titulo">Cómo funciona</h3>
+      <div class="pasos-grid">
+        <div class="paso">
+          <div class="paso-num">1</div>
+          <h4>Sube la clase entera</h4>
+          <p>El ZIP de entregas de Teams o de Aules/Moodle, tal cual lo descargas. PDF o fotos, también de libretas.</p>
+        </div>
+        <div class="paso">
+          <div class="paso-num">2</div>
+          <h4>Recibe una propuesta por alumno</h4>
+          <p>Nota, comentario con ejemplos de su propio trabajo y tres mejoras concretas, aplicando tu rúbrica igual a todos.</p>
+        </div>
+        <div class="paso">
+          <div class="paso-num">3</div>
+          <h4>Tú decides</h4>
+          <p>Ajustas lo que quieras y apruebas. La nota va a tu cuaderno y el feedback le llega al alumno firmado por ti.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="seccion-titulo">Precios</h3>
+      <div class="precios-grid">
+        <div class="precio">
+          <h4>Para probar</h4>
+          <div class="precio-num">Gratis</div>
+          <p>20 correcciones al registrarte</p>
+        </div>
+        <div class="precio destacado">
+          <h4>Bono 100</h4>
+          <div class="precio-num">9 €</div>
+          <p>100 correcciones · no caducan<br>9 céntimos por alumno</p>
+        </div>
+        <div class="precio">
+          <h4>Bono 500</h4>
+          <div class="precio-num">35 €</div>
+          <p>500 correcciones · no caducan<br>7 céntimos por alumno</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="faq">
+      <h3 class="seccion-titulo">Preguntas frecuentes</h3>
+      <details>
+        <summary>¿Quién pone la nota?</summary>
+        <p>Tú. La aplicación propone una nota y un comentario aplicando tu rúbrica, pero nada llega al alumno ni al cuaderno hasta que tú lo revisas y lo apruebas. Puedes cambiar la nota y el texto antes.</p>
+      </details>
+      <details>
+        <summary>¿Lee trabajos escritos a mano?</summary>
+        <p>Sí, a partir de fotos o PDF escaneados. Si una foto no se lee bien, la corrección te lo avisa en lugar de inventarse nada, y queda marcada para que la mires.</p>
+      </details>
+      <details>
+        <summary>¿Qué pasa con los datos de mis alumnos?</summary>
+        <p>Tus grupos, alumnos y notas solo los ves tú. Los trabajos se envían para su corrección y no se guardan en nuestros servidores. Detalles en la <a href="privacidad.html">política de privacidad</a>.</p>
+      </details>
+      <details>
+        <summary>¿Cómo pago?</summary>
+        <p>Con tarjeta, por bonos. Sin suscripción ni cargos mensuales: compras correcciones cuando las necesitas y no caducan.</p>
+      </details>
+    </section>
+
+    <footer class="landing-footer">
+      <a href="privacidad.html">Privacidad</a> · <a href="privacidad.html#aviso-legal">Aviso legal</a>
+    </footer>
+  </main>
+</div>
+
+<!-- ══════════════ APLICACIÓN (con sesión) ══════════════ -->
+<div id="app" class="hidden">
 <header>
   <div class="header-inner">
     <div class="logo-icon">✏️</div>
     <div class="logo-text">
-      <h1>AntescorregIA</h1>
-      <p>Corrector de tareas con Inteligencia Artificial</p>
+      <h1>Lápiz Verde</h1>
+      <p>Corrección de tareas para docentes</p>
+    </div>
+    <div class="header-user">
+      <span class="creditos-chip" id="creditosChip" title="Correcciones disponibles">— correcciones</span>
+      <button class="btn-header" onclick="abrirCompra()">Comprar</button>
+      <span class="user-email" id="userEmail"></span>
+      <button class="btn-header ghost" onclick="salir()">Salir</button>
     </div>
   </div>
 </header>
 
 <main class="container">
 
+  <div id="bannerApp" class="banner hidden"></div>
+
   <nav class="tab-nav">
-    <button class="tab-btn active" data-tab="corrector" onclick="switchTab('corrector')">✏️ Corrector IA</button>
+    <button class="tab-btn active" data-tab="corrector" onclick="switchTab('corrector')">✏️ Corrector</button>
     <button class="tab-btn" data-tab="cuaderno" onclick="switchTab('cuaderno')">📒 Cuaderno</button>
   </nav>
 
@@ -528,27 +748,19 @@
 
   <!-- ── CONFIGURACIÓN ── -->
   <details class="config-panel" id="configPanel">
-    <summary>⚙️ Configuración del profesor</summary>
+    <summary>⚙️ Configuración</summary>
     <div class="config-grid">
       <div class="form-group">
-        <label>Resend API Key</label>
-        <input type="password" id="resendKey" placeholder="re_xxxxxxxxxxxx">
+        <label for="firmaInput">Tu nombre (firma del feedback)</label>
+        <input type="text" id="firmaInput" placeholder="Ej: Bruno, profe de Lengua" maxlength="60">
       </div>
       <div class="form-group">
-        <label>Email remitente (verificado en Resend)</label>
-        <input type="email" id="fromEmail" placeholder="profe@centro.edu">
+        <label for="cursoPref">Curso por defecto</label>
+        <select id="cursoPref" class="select-curso"></select>
       </div>
-      <div class="form-group">
-        <label>Curso por defecto</label>
-        <select id="cursoPref">
-          <option value="1ESO">1.º ESO</option>
-          <option value="2ESO">2.º ESO</option>
-          <option value="3ESO">3.º ESO</option>
-          <option value="4ESO">4.º ESO</option>
-        </select>
-      </div>
+      <div class="form-group"></div>
       <div class="form-group" style="justify-content:flex-end">
-        <button class="btn btn-secondary" onclick="saveConfig()">Guardar configuración</button>
+        <button class="btn btn-secondary" onclick="saveConfig()">Guardar</button>
       </div>
     </div>
   </details>
@@ -558,51 +770,62 @@
     <h2>Nueva corrección</h2>
     <div class="form-grid">
 
+      <div class="destino-box">
+        <div class="form-group">
+          <label for="selGrupo">Grupo del cuaderno</label>
+          <select id="selGrupo" onchange="onGrupoChange()"></select>
+        </div>
+        <div class="form-group">
+          <label for="selTarea">Tarea</label>
+          <select id="selTarea" onchange="onTareaChange()" disabled></select>
+        </div>
+        <div class="destino-hint" id="destinoHint">Elige grupo y tarea para que las notas aprobadas se guarden solas en tu cuaderno. Si no, puedes corregir con un Excel de alumnos.</div>
+      </div>
+
       <div class="form-group">
-        <label>ZIP de Microsoft Teams</label>
+        <label>ZIP de entregas</label>
         <div class="dropzone" id="zipZone">
           <input type="file" id="zipFile" accept=".zip" onchange="onZipSelected(this)">
           <span class="dropzone-icon">📦</span>
           <div class="dropzone-label">Arrastra el ZIP aquí o haz clic</div>
-          <div class="dropzone-hint">Descargado desde la tarea de Teams Education</div>
+          <div class="dropzone-hint">Descargado de Teams o de Aules/Moodle ("Descargar todas las entregas")</div>
         </div>
       </div>
 
-      <div class="form-group">
+      <div class="form-group" id="excelGroup">
         <label>Excel de alumnos</label>
         <div class="dropzone" id="excelZone">
-          <input type="file" id="excelFile" accept=".xlsx,.xls" onchange="onExcelSelected(this)">
+          <input type="file" id="excelFile" accept=".xlsx,.xls,.csv" onchange="onExcelSelected(this)">
           <span class="dropzone-icon">📊</span>
           <div class="dropzone-label">Arrastra el Excel aquí o haz clic</div>
-          <div class="dropzone-hint">Columnas requeridas: "nombre" y "email"</div>
+          <div class="dropzone-hint">Columnas: "nombre", "apellidos" (opcional) y "email"</div>
         </div>
       </div>
 
       <div class="form-group">
-        <label>Nombre exacto de la tarea</label>
-        <input type="text" id="nombreTarea" placeholder='Ej: La legión del águila'>
+        <label for="nombreTarea">Nombre de la tarea</label>
+        <input type="text" id="nombreTarea" placeholder="Ej: La legión del águila">
       </div>
 
       <div class="form-group">
-        <label>Curso</label>
-        <select id="cursoForm">
-          <option value="1ESO">1.º ESO</option>
-          <option value="2ESO">2.º ESO</option>
-          <option value="3ESO">3.º ESO</option>
-          <option value="4ESO">4.º ESO</option>
-        </select>
+        <label for="cursoForm">Curso</label>
+        <select id="cursoForm" class="select-curso"></select>
       </div>
 
       <div class="form-group full-width">
-        <label>Rúbrica de corrección</label>
-        <textarea id="rubrica" placeholder="Describe los criterios: contenido, estructura, ortografía, creatividad, presentación..."></textarea>
+        <label for="rubrica">Rúbrica de corrección</label>
+        <textarea id="rubrica" placeholder="- Contenido (4 pts): ...&#10;- Estructura (3 pts): ...&#10;- Ortografía y presentación (3 pts): ..."></textarea>
+        <div class="rubrica-tools">
+          <input type="text" id="rubricaDescripcion" placeholder="¿Sin rúbrica? Describe la tarea en una frase: «redacción sobre las vacaciones, 150 palabras»">
+          <button class="btn btn-secondary btn-sm" id="btnRubrica" onclick="proponerRubrica()">✨ Proponer rúbrica</button>
+        </div>
       </div>
 
     </div>
 
     <div class="form-footer">
       <div id="alumnosBadge" class="count-badge hidden">
-        📋 <span id="alumnosNum">0</span> alumnos en el Excel
+        📋 <span id="alumnosNum">0</span> <span id="alumnosOrigen">alumnos</span>
       </div>
       <button class="btn btn-primary" id="btnCorregir" onclick="corregirClase()">
         🚀 Corregir clase
@@ -624,8 +847,9 @@
   <!-- ── RESULTADOS ── -->
   <div id="resultsSection" class="hidden">
     <div class="results-header">
-      <h2>Resultados de la corrección</h2>
+      <h2>Revisión</h2>
       <div class="stats-bar" id="statsBar"></div>
+      <button class="btn btn-success btn-sm hidden" id="btnAprobarTodas" onclick="aprobarTodas()">✔ Aprobar y guardar todas las revisadas</button>
     </div>
     <div class="cards-grid" id="cardsGrid"></div>
   </div>
@@ -635,21 +859,29 @@
   <!-- ── CUADERNO ── -->
   <div id="tab-cuaderno" class="tab-pane hidden">
 
-    <!-- Vista: lista de grupos -->
     <div id="cuaderno-grupos">
       <div class="cuaderno-header">
         <h2>Mis grupos</h2>
-        <button class="btn btn-secondary btn-sm" onclick="cargarGrupos()">↻ Actualizar</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-secondary btn-sm" onclick="cargarGrupos()">↻ Actualizar</button>
+          <button class="btn btn-primary btn-sm" onclick="modalNuevoGrupo()">+ Nuevo grupo</button>
+        </div>
       </div>
       <div id="grupos-grid" class="grupos-grid"></div>
     </div>
 
-    <!-- Vista: alumnos y notas del grupo -->
     <div id="cuaderno-alumnos" class="hidden">
       <div class="notas-panel">
         <div class="notas-panel-header">
           <button class="btn btn-secondary btn-sm" onclick="volverAGrupos()">← Volver</button>
           <h2 id="cuaderno-grupo-nombre">—</h2>
+          <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">
+            <label class="btn btn-secondary btn-sm" style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--text);">
+              📥 Importar alumnos (Excel)
+              <input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="importarAlumnos(this)">
+            </label>
+            <button class="btn btn-primary btn-sm" onclick="modalNuevaTarea()">+ Nueva tarea</button>
+          </div>
         </div>
         <div id="cuaderno-tabla-wrapper"></div>
       </div>
@@ -658,6 +890,11 @@
   </div><!-- /tab-cuaderno -->
 
 </main>
+</div><!-- /app -->
+
+<div id="modal" class="modal hidden" onclick="if (event.target === this) cerrarModal()">
+  <div class="modal-card" id="modalContenido"></div>
+</div>
 
 <div id="toast" class="toast"></div>
 
@@ -670,31 +907,213 @@
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ5b3l5dnp5b29oc2N6Y2VleWRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMDM5NjEsImV4cCI6MjA5MzU3OTk2MX0.XA9FV5jEW5L8MGyVcYSsZ7hkynlngDZTcJFjWW48KmE';
   const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  /* ── Estado Cuaderno ── */
-  let grupoActual = null;
+  const CURSOS = [
+    ['1PRI', '1.º Primaria'], ['2PRI', '2.º Primaria'], ['3PRI', '3.º Primaria'],
+    ['4PRI', '4.º Primaria'], ['5PRI', '5.º Primaria'], ['6PRI', '6.º Primaria'],
+    ['1ESO', '1.º ESO'], ['2ESO', '2.º ESO'], ['3ESO', '3.º ESO'], ['4ESO', '4.º ESO'],
+  ];
+  const CORRECCIONES_EN_PARALELO = 3;
+  const MAX_LADO_IMAGEN = 1568;   // por encima, la IA no gana detalle y cuesta más
+  const MAX_MB_ARCHIVO = 3.2;     // límite de Vercel: 4,5 MB por petición, ya en base64
+
+  /* ── Estado ── */
+  let usuario = null;
+  let perfil = null;
+  let gruposCache = [];
+  let tareasGrupoSel = [];
+  let alumnosGrupoSel = [];
+
+  let grupoActual = null;      // cuaderno
   let tareasActuales = [];
   let notasCache = {};
   let cellsDirty = new Set();
 
-  /* ── Datos en memoria ── */
-  let alumnosData = [];   // [{nombre, email}]
-  let cardPayloads = {};  // cardId → {alumno, result}
+  let alumnosData = [];        // del Excel: [{nombre, email}]
+  let cards = [];              // índice → {alumno, result, estado}
   let isProcessing = false;
 
+  /* ══════════════════════════════════════
+     SESIÓN
+  ══════════════════════════════════════ */
+
+  async function api(ruta, body) {
+    const { data: { session } } = await sbClient.auth.getSession();
+    const resp = await fetch('/api/' + ruta, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session ? { Authorization: 'Bearer ' + session.access_token } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    let json = {};
+    try { json = await resp.json(); } catch (_) {}
+    if (!resp.ok) {
+      const e = new Error(json.error || (resp.status === 413 ? 'El archivo es demasiado grande.' : `Error ${resp.status}`));
+      e.status = resp.status;
+      e.codigo = json.codigo;
+      throw e;
+    }
+    return json;
+  }
+
+  async function iniciar() {
+    rellenarSelectsCurso();
+    setupDropzone('zipZone',   'zipFile',   /\.zip$/i,              onZipSelected);
+    setupDropzone('excelZone', 'excelFile', /\.(xlsx|xls|csv)$/i,   onExcelSelected);
+    document.getElementById('formLogin').addEventListener('submit', enviarEnlace);
+
+    sbClient.auth.onAuthStateChange((evento, session) => {
+      if (session?.user && usuario?.id !== session.user.id) entrar(session.user);
+      if (evento === 'SIGNED_OUT') mostrarEntrada();
+    });
+    const { data: { session } } = await sbClient.auth.getSession();
+    if (session?.user) entrar(session.user); else mostrarEntrada();
+  }
+
+  function mostrarEntrada() {
+    usuario = null;
+    document.getElementById('app').classList.add('hidden');
+    document.getElementById('pantalla-entrada').classList.remove('hidden');
+  }
+
+  async function enviarEnlace(ev) {
+    ev.preventDefault();
+    const email = document.getElementById('loginEmail').value.trim();
+    const btn = document.getElementById('btnLogin');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="btn-spinner"></div> Enviando…';
+    const { error } = await sbClient.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: location.origin + location.pathname },
+    });
+    btn.disabled = false;
+    btn.textContent = 'Entrar con mi correo';
+    const ok = document.getElementById('loginOk');
+    if (error) {
+      showToast('No se pudo enviar el enlace: ' + error.message, 'error');
+      return;
+    }
+    ok.innerHTML = `📬 Te hemos enviado un enlace a <strong>${esc(email)}</strong>. Ábrelo desde este mismo navegador para entrar.`;
+    ok.classList.remove('hidden');
+  }
+
+  async function entrar(user) {
+    usuario = user;
+    document.getElementById('pantalla-entrada').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    document.getElementById('userEmail').textContent = user.email;
+    loadConfig();
+    await cargarPerfil();
+    await cargarGruposSelector();
+    comprobarRetornoPago();
+  }
+
+  async function salir() {
+    await sbClient.auth.signOut();
+    location.href = location.pathname;
+  }
+
+  async function cargarPerfil() {
+    const { data, error } = await sbClient.from('perfiles').select('id,email,nombre,creditos').eq('id', usuario.id).maybeSingle();
+    const banner = document.getElementById('bannerApp');
+    if (error || !data) {
+      banner.textContent = '⚠️ La base de datos todavía no está preparada para cuentas de usuario (falta ejecutar la migración 001). Las correcciones no funcionarán hasta entonces.';
+      banner.classList.remove('hidden');
+      return;
+    }
+    perfil = data;
+    pintarCreditos(perfil.creditos);
+    document.getElementById('firmaInput').value = perfil.nombre || '';
+  }
+
+  function pintarCreditos(n) {
+    if (perfil) perfil.creditos = n;
+    const chip = document.getElementById('creditosChip');
+    chip.textContent = `${n} ${n === 1 ? 'corrección' : 'correcciones'}`;
+    chip.classList.toggle('bajo', n <= 5);
+  }
+
+  /* ── Pagos ── */
+  function abrirCompra(motivo = '') {
+    abrirModal(`
+      <h3>Comprar correcciones</h3>
+      ${motivo ? `<div class="banner">${esc(motivo)}</div>` : ''}
+      <p style="color:var(--text-muted);font-size:14px;">Pago único con tarjeta. Sin suscripción. Las correcciones no caducan.</p>
+      <div class="bonos">
+        <button class="bono" onclick="comprar('100', this)">
+          <div class="bono-precio">9 €</div>
+          <div><strong>100 correcciones</strong></div>
+          <div class="bono-detalle">9 cént. por alumno</div>
+        </button>
+        <button class="bono" onclick="comprar('500', this)">
+          <div class="bono-precio">35 €</div>
+          <div><strong>500 correcciones</strong></div>
+          <div class="bono-detalle">7 cént. por alumno</div>
+        </button>
+      </div>
+      <div class="modal-actions"><button class="btn btn-secondary btn-sm" onclick="cerrarModal()">Cerrar</button></div>`);
+  }
+
+  async function comprar(bono, btn) {
+    btn.disabled = true;
+    try {
+      const { url } = await api('checkout', { bono });
+      location.href = url;
+    } catch (e) {
+      btn.disabled = false;
+      showToast(e.message, 'error');
+    }
+  }
+
+  async function comprobarRetornoPago() {
+    const params = new URLSearchParams(location.search);
+    const pago = params.get('pago');
+    if (!pago) return;
+    history.replaceState(null, '', location.pathname);
+    if (pago !== 'ok') { showToast('Pago cancelado. No se ha cobrado nada.', 'warning'); return; }
+
+    showToast('✅ Pago recibido. Sumando tus correcciones…', 'success');
+    const antes = perfil?.creditos ?? 0;
+    for (let i = 0; i < 8; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      await cargarPerfil();
+      if ((perfil?.creditos ?? 0) > antes) { showToast(`✅ Ya tienes ${perfil.creditos} correcciones`, 'success'); return; }
+    }
+    showToast('El pago está hecho; las correcciones pueden tardar un minuto en aparecer. Recarga la página.', 'warning');
+  }
+
+  /* ── Modal ── */
+  function abrirModal(html) {
+    document.getElementById('modalContenido').innerHTML = html;
+    document.getElementById('modal').classList.remove('hidden');
+    document.querySelector('#modalContenido input, #modalContenido select')?.focus();
+  }
+  function cerrarModal() {
+    document.getElementById('modal').classList.add('hidden');
+  }
+
   /* ── Config ── */
+  function rellenarSelectsCurso() {
+    const opciones = CURSOS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
+    document.querySelectorAll('.select-curso').forEach(s => { s.innerHTML = opciones; });
+  }
+
   function loadConfig() {
-    document.getElementById('resendKey').value = localStorage.getItem('resendKey') || '';
-    document.getElementById('fromEmail').value = localStorage.getItem('fromEmail') || '';
     const curso = localStorage.getItem('curso') || '1ESO';
     document.getElementById('cursoPref').value = curso;
     document.getElementById('cursoForm').value = curso;
   }
 
-  function saveConfig() {
-    localStorage.setItem('resendKey', document.getElementById('resendKey').value.trim());
-    localStorage.setItem('fromEmail', document.getElementById('fromEmail').value.trim());
+  async function saveConfig() {
     localStorage.setItem('curso', document.getElementById('cursoPref').value);
     document.getElementById('cursoForm').value = document.getElementById('cursoPref').value;
+    const nombre = document.getElementById('firmaInput').value.trim();
+    if (perfil && nombre !== (perfil.nombre || '')) {
+      const { error } = await sbClient.from('perfiles').update({ nombre }).eq('id', usuario.id);
+      if (error) return showToast('No se pudo guardar tu nombre: ' + error.message, 'error');
+      perfil.nombre = nombre;
+    }
     showToast('✅ Configuración guardada', 'success');
     document.getElementById('configPanel').removeAttribute('open');
   }
@@ -710,7 +1129,107 @@
     toastTimer = setTimeout(() => t.classList.remove('show'), 5000);
   }
 
-  /* ── Dropzone drag events ── */
+  /* ══════════════════════════════════════
+     CORRECTOR: grupo y tarea de destino
+  ══════════════════════════════════════ */
+
+  async function cargarGruposSelector() {
+    const sel = document.getElementById('selGrupo');
+    const { data, error } = await sbClient.from('grupos').select('id,nombre,nivel').order('nombre');
+    gruposCache = error ? [] : (data || []);
+    const actual = sel.value;
+    sel.innerHTML = `<option value="">— No guardar en el cuaderno (usar Excel) —</option>` +
+      gruposCache.map(g => `<option value="${g.id}">${esc(g.nombre)}</option>`).join('');
+    if (gruposCache.some(g => g.id === actual)) sel.value = actual;
+    if (!gruposCache.length) {
+      document.getElementById('destinoHint').innerHTML =
+        'Consejo: crea tu grupo en <a href="#" onclick="switchTab(\'cuaderno\');return false;">Cuaderno</a> e importa tus alumnos. Así las notas aprobadas se guardan solas y no necesitas el Excel cada vez.';
+    }
+    await onGrupoChange();
+  }
+
+  async function onGrupoChange() {
+    const grupoId = document.getElementById('selGrupo').value;
+    const selTarea = document.getElementById('selTarea');
+    tareasGrupoSel = [];
+    alumnosGrupoSel = [];
+    document.getElementById('excelGroup').classList.toggle('hidden', !!grupoId);
+
+    if (!grupoId) {
+      selTarea.innerHTML = '<option value="">—</option>';
+      selTarea.disabled = true;
+      actualizarBadgeAlumnos();
+      return;
+    }
+
+    const grupo = gruposCache.find(g => g.id === grupoId);
+    if (grupo?.nivel && CURSOS.some(([v]) => v === grupo.nivel)) document.getElementById('cursoForm').value = grupo.nivel;
+
+    const [{ data: tareas }, { data: alumnos }] = await Promise.all([
+      sbClient.from('tareas').select('id,titulo,rubrica').eq('grupo_id', grupoId).order('created_at', { ascending: false }),
+      sbClient.from('alumnos').select('id,nombre,apellidos,email').eq('grupo_id', grupoId).eq('activo', true).order('apellidos').order('nombre'),
+    ]);
+    tareasGrupoSel = tareas || [];
+    alumnosGrupoSel = (alumnos || []).map(a => ({
+      id: a.id,
+      nombre: [a.nombre, a.apellidos].filter(Boolean).join(' '),
+      email: a.email || '',
+    }));
+
+    selTarea.disabled = false;
+    selTarea.innerHTML = `<option value="">— Elige tarea —</option>` +
+      tareasGrupoSel.map(t => `<option value="${t.id}">${esc(t.titulo)}</option>`).join('') +
+      `<option value="__nueva">+ Nueva tarea…</option>`;
+    actualizarBadgeAlumnos();
+  }
+
+  function onTareaChange() {
+    const sel = document.getElementById('selTarea');
+    if (sel.value === '__nueva') {
+      sel.value = '';
+      modalNuevaTarea(document.getElementById('selGrupo').value, document.getElementById('nombreTarea').value.trim());
+      return;
+    }
+    const tarea = tareasGrupoSel.find(t => t.id === sel.value);
+    if (!tarea) return;
+    document.getElementById('nombreTarea').value = tarea.titulo;
+    if (tarea.rubrica) {
+      document.getElementById('rubrica').value = tarea.rubrica;
+      showToast('Rúbrica de esta tarea cargada', 'success');
+    }
+  }
+
+  function actualizarBadgeAlumnos() {
+    const grupoId = document.getElementById('selGrupo').value;
+    const n = grupoId ? alumnosGrupoSel.length : alumnosData.length;
+    document.getElementById('alumnosNum').textContent = n;
+    document.getElementById('alumnosOrigen').textContent = grupoId ? 'alumnos en el grupo' : 'alumnos en el Excel';
+    document.getElementById('alumnosBadge').classList.toggle('hidden', !n);
+  }
+
+  async function proponerRubrica() {
+    const descripcion = document.getElementById('rubricaDescripcion').value.trim()
+      || document.getElementById('nombreTarea').value.trim();
+    if (!descripcion) return showToast('Describe la tarea en una frase para proponer una rúbrica', 'error');
+    const rubricaActual = document.getElementById('rubrica').value.trim();
+    if (rubricaActual && !confirm('¿Reemplazar la rúbrica que ya has escrito?')) return;
+
+    const btn = document.getElementById('btnRubrica');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="btn-spinner"></div> Pensando…';
+    try {
+      const { rubrica } = await api('rubrica', { descripcion, curso: document.getElementById('cursoForm').value });
+      document.getElementById('rubrica').value = rubrica;
+      showToast('✨ Rúbrica propuesta. Revísala y ajústala a tu gusto.', 'success');
+    } catch (e) {
+      showToast(e.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '✨ Proponer rúbrica';
+    }
+  }
+
+  /* ── Dropzones ── */
   function setupDropzone(zoneId, inputId, ext, onFile) {
     const zone = document.getElementById(zoneId);
     zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
@@ -736,26 +1255,27 @@
     zone.querySelector('.dropzone-label').textContent = fileName;
   }
 
-  /* ── ZIP ── */
   function onZipSelected(input) {
     const file = input.files[0];
     if (file) markZoneLoaded('zipZone', file.name);
   }
 
-  /* ── Excel ── */
   async function onExcelSelected(input) {
     const file = input.files[0];
     if (!file) return;
     markZoneLoaded('excelZone', file.name);
     try {
-      alumnosData = await parseExcel(file);
-      document.getElementById('alumnosNum').textContent = alumnosData.length;
-      document.getElementById('alumnosBadge').classList.remove('hidden');
-    } catch(e) {
+      alumnosData = (await parseExcel(file)).map(a => ({
+        nombre: [a.nombre, a.apellidos].filter(Boolean).join(' '),
+        email: a.email,
+      }));
+      actualizarBadgeAlumnos();
+    } catch (e) {
       showToast('Error al leer el Excel: ' + e.message, 'error');
     }
   }
 
+  /* Devuelve [{nombre, apellidos, email}] */
   async function parseExcel(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -766,28 +1286,46 @@
           const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
           if (!rows.length) throw new Error('El Excel está vacío');
           const keys = Object.keys(rows[0]);
-          const nombreKey = keys.find(k => k.toLowerCase().includes('nombre')) || keys[0];
-          const emailKey  = keys.find(k => k.toLowerCase().includes('email') || k.toLowerCase().includes('correo')) || keys[1];
+          const k = s => norm(s);
+          const apellidosKey = keys.find(x => k(x).includes('apellido'));
+          const nombreKey = keys.find(x => k(x).includes('nombre') && x !== apellidosKey) || keys[0];
+          const emailKey  = keys.find(x => k(x).includes('email') || k(x).includes('correo') || k(x).includes('mail'));
           const result = rows
-            .map(r => ({ nombre: String(r[nombreKey] || '').trim(), email: String(r[emailKey] || '').trim() }))
+            .map(r => ({
+              nombre: String(r[nombreKey] || '').trim(),
+              apellidos: apellidosKey ? String(r[apellidosKey] || '').trim() : '',
+              email: emailKey ? String(r[emailKey] || '').trim() : '',
+            }))
             .filter(a => a.nombre);
           if (!result.length) throw new Error('No se encontraron filas con nombre');
           resolve(result);
-        } catch(err) { reject(err); }
+        } catch (err) { reject(err); }
       };
       reader.onerror = () => reject(new Error('Error leyendo el archivo'));
       reader.readAsArrayBuffer(file);
     });
   }
 
-  /* ── ZIP parsing ── */
-  async function loadZip(file) {
-    return JSZip.loadAsync(file);
+  /* ══════════════════════════════════════
+     CORRECTOR: buscar el trabajo de cada alumno en el ZIP
+  ══════════════════════════════════════ */
+
+  /* Minúsculas y sin tildes */
+  function norm(str) {
+    return String(str).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   }
 
-  /* Normaliza texto: minúsculas, sin tildes */
-  function norm(str) {
-    return str.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  function palabras(str) {
+    return norm(str).split(/[^a-z0-9ñ]+/).filter(p => p.length > 1);
+  }
+
+  /* ¿Aparecen todas las palabras del nombre en este trozo de ruta? Soporta
+     "Ana López", "López, Ana" y "Ana López_1234_assignsubmission_file_" (Moodle). */
+  function coincideNombre(parteRuta, nombre, minimo) {
+    const enRuta = new Set(palabras(parteRuta));
+    const delNombre = palabras(nombre);
+    const aciertos = delNombre.filter(p => enRuta.has(p)).length;
+    return delNombre.length > 0 && aciertos >= (minimo ?? delNombre.length);
   }
 
   /* Extrae el número de versión del path ("Versión 2" → 2) */
@@ -796,107 +1334,68 @@
     return m ? parseInt(m[1]) : 0;
   }
 
-  async function findStudentFile(zip, studentName, taskName) {
-    const nStudent = norm(studentName);
-    const nTask    = norm(taskName);
+  const EXT_VALIDAS = /\.(pdf|jpe?g|png|webp|gif)$/i;
 
-    const candidates = Object.keys(zip.files).filter(path => {
-      if (zip.files[path].dir) return false;
-      if (!/\.(pdf|jpg|jpeg|png)$/i.test(path)) return false;
-      const parts = path.split('/');
-      return parts.some(p => norm(p).includes(nStudent)) &&
-             parts.some(p => norm(p).includes(nTask));
-    });
-
-    console.log('Buscando:', nStudent, '| Archivos ZIP:', Object.keys(zip.files).slice(0,10));
-    if (!candidates.length) return null;
-
-    /* Prefer latest version */
-    candidates.sort((a, b) => versionNum(b) - versionNum(a));
-    const chosen = candidates[0];
-    const ext    = chosen.split('.').pop().toLowerCase();
-    const base64 = await zip.files[chosen].async('base64');
-
-    return { base64, tipo: ext === 'pdf' ? 'pdf' : 'imagen', ext, filename: chosen,
-             sizeMB: +(base64.length * 3 / 4 / 1024 / 1024).toFixed(1) };
+  /* Teams mete el nombre de la tarea en la ruta y puede traer varias tareas en el mismo ZIP;
+     Moodle/Aules no lo mete. Si el ZIP menciona la tarea en alguna ruta, se exige; si no, basta el alumno. */
+  function filtrarPorTarea(rutas, nombreTarea) {
+    if (!nombreTarea) return rutas;
+    const conTarea = rutas.filter(r => norm(r).includes(norm(nombreTarea)));
+    return conTarea.length ? conTarea : rutas;
   }
 
-  /* ── API ── */
-  async function corregirAlumno(payload) {
-    console.log('Tamaño base64:', payload.archivo_base64?.length, 'chars, ~', (payload.archivo_base64?.length * 0.75 / 1024 / 1024).toFixed(2), 'MB');
-    const resp = await fetch('https://antescorregia.vercel.app/api/corregir', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!resp.ok) {
-      let msg = `Error ${resp.status}`;
-      try { const j = await resp.json(); msg = j.error || msg; } catch(_) {}
-      throw new Error(msg);
-    }
-    return resp.json();
+  function buscarArchivosAlumno(rutas, nombre) {
+    const buscar = minimo => rutas.filter(ruta => ruta.split('/').some(p => coincideNombre(p, nombre, minimo)));
+    let candidatos = buscar();
+    /* Nombre largo (dos apellidos) que en la plataforma sale sin uno: basta con 2 palabras */
+    if (!candidatos.length && palabras(nombre).length >= 3) candidatos = buscar(2);
+    return candidatos.sort((a, b) => versionNum(b) - versionNum(a));
   }
 
-  /* ── Email via Resend ── */
-  function buildEmailHtml(nombre, taskName, r) {
-    const cls = gradeClass(r.nota);
-    const colors = { sobresaliente:'#D97706', notable:'#4F46E5', bien:'#0891B2', suficiente:'#EA580C', insuficiente:'#DC2626' };
-    const color = colors[cls] || '#4F46E5';
-    const mejoras = r.propuestas_mejora.map((m, i) =>
-      `<li style="margin-bottom:8px;padding:9px 14px;background:#F8FAFC;border-left:3px solid #6366F1;border-radius:6px;font-size:14px;">
-        <strong>${i+1}.</strong> ${esc(m)}</li>`).join('');
-    return `<!DOCTYPE html><html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F1F5F9;margin:0;padding:24px;">
-      <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
-        <div style="background:linear-gradient(135deg,#4F46E5,#7C3AED);padding:32px 40px;color:white;">
-          <h1 style="margin:0;font-size:22px;font-weight:800;">Feedback de tu tarea</h1>
-          <p style="margin:8px 0 0;opacity:.85;font-size:15px;">${esc(taskName)}</p>
-        </div>
-        <div style="padding:32px 40px;">
-          <p style="font-size:16px;color:#0F172A;margin-bottom:6px;">Hola, <strong>${esc(nombre)}</strong>,</p>
-          <p style="color:#64748B;font-size:14px;">Tu profesor/a ha revisado tu tarea. Aquí tienes el feedback detallado:</p>
-          <div style="text-align:center;padding:24px 0;margin:24px 0;background:#F8FAFC;border-radius:12px;">
-            <div style="font-size:56px;font-weight:900;color:${color};line-height:1;">${r.nota.toFixed(1)}</div>
-            <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${color};margin-top:6px;">${esc(r.nota_texto)}</div>
-          </div>
-          <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#64748B;margin-bottom:10px;">Comentario detallado</h3>
-          <p style="color:#0F172A;line-height:1.8;margin-bottom:24px;font-size:14px;">${esc(r.comentario)}</p>
-          <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#64748B;margin-bottom:10px;">Propuestas de mejora</h3>
-          <ul style="list-style:none;padding:0;margin:0 0 24px;">${mejoras}</ul>
-          <div style="background:linear-gradient(135deg,#EEF2FF,#F5F3FF);border:1px solid #C7D2FE;border-radius:12px;padding:16px 20px;">
-            <p style="color:#4338CA;font-style:italic;margin:0;font-size:14px;line-height:1.7;">✨ ${esc(r.mensaje_motivador)}</p>
-          </div>
-        </div>
-        <div style="padding:16px 40px;background:#F8FAFC;text-align:center;font-size:12px;color:#94A3B8;">
-          Feedback generado con AntescorregIA · Corrector de tareas con IA
-        </div>
-      </div></body></html>`;
+  async function blobABase64(blob) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result).split(',')[1]);
+      r.onerror = () => reject(new Error('No se pudo leer el archivo'));
+      r.readAsDataURL(blob);
+    });
   }
 
-  async function sendEmail(alumno, result, taskName) {
-    const key  = localStorage.getItem('resendKey') || '';
-    const from = localStorage.getItem('fromEmail') || '';
-    if (!key)  throw new Error('Configura la Resend API Key en ajustes');
-    if (!from) throw new Error('Configura el email remitente en ajustes');
-    if (!alumno.email) throw new Error(`Sin email para ${alumno.nombre}`);
-
-    const resp = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from, to: alumno.email,
-        subject: `Feedback de tu tarea: ${taskName}`,
-        html: buildEmailHtml(alumno.nombre, taskName, result),
-      }),
-    });
-    if (!resp.ok) {
-      const e = await resp.json().catch(() => ({}));
-      throw new Error(e.message || `Error Resend (${resp.status})`);
+  /* Reduce fotos del móvil (4000 px, 5 MB) a lo que la IA aprovecha: más rápido y más barato */
+  async function prepararImagen(blob) {
+    try {
+      const bmp = await createImageBitmap(blob);
+      const escala = Math.min(1, MAX_LADO_IMAGEN / Math.max(bmp.width, bmp.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(bmp.width * escala);
+      canvas.height = Math.round(bmp.height * escala);
+      canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+      const jpeg = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.85));
+      return { base64: await blobABase64(jpeg), tipo: 'jpeg' };
+    } catch (_) {
+      const ext = blob.type.split('/')[1] || 'jpeg';
+      return { base64: await blobABase64(blob), tipo: ext === 'jpg' ? 'jpeg' : ext };
     }
   }
 
-  /* ── Utilidades de renderizado ── */
+  async function leerArchivoZip(zip, ruta) {
+    const ext = ruta.split('.').pop().toLowerCase();
+    if (ext === 'pdf') {
+      const base64 = await zip.files[ruta].async('base64');
+      return { base64, tipo: 'pdf', sizeMB: base64.length * 3 / 4 / 1024 / 1024 };
+    }
+    const mime = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
+    const blob = new Blob([await zip.files[ruta].async('uint8array')], { type: mime });
+    const img = await prepararImagen(blob);
+    return { ...img, sizeMB: img.base64.length * 3 / 4 / 1024 / 1024 };
+  }
+
+  /* ══════════════════════════════════════
+     CORRECTOR: tarjetas de revisión
+  ══════════════════════════════════════ */
+
   function esc(str) {
-    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
   function gradeClass(nota) {
@@ -907,40 +1406,48 @@
     return 'insuficiente';
   }
 
-  function cardId(nombre) {
-    return 'card-' + nombre.replace(/[^a-zA-Z0-9]/g, '-');
+  function notaTexto(nota) {
+    return { sobresaliente: 'Sobresaliente', notable: 'Notable', bien: 'Bien', suficiente: 'Suficiente', insuficiente: 'Insuficiente' }[gradeClass(nota)];
   }
 
-  function renderSkeletonCard(alumno) {
-    const id = cardId(alumno.nombre);
-    return `<div class="student-card" id="${id}">
-      <div class="card-header">
-        <div class="student-name">${esc(alumno.nombre)}</div>
-      </div>
+  function tareaDestino() {
+    return document.getElementById('selTarea').value || null;
+  }
+
+  function cabeceraCard(alumno, extra = '') {
+    return `<div class="card-header"><div class="student-name">${esc(alumno.nombre)}</div>${extra}</div>`;
+  }
+
+  function renderSkeletonCard(i) {
+    return `<div class="student-card" id="card-${i}">
+      ${cabeceraCard(cards[i].alumno)}
       <div class="skeleton-body">
         <div class="mini-spinner"></div>
-        <span style="color:var(--text-muted);font-size:14px;">Analizando con IA…</span>
+        <span style="color:var(--text-muted);font-size:14px;">En cola…</span>
       </div>
     </div>`;
   }
 
-  function renderCard(alumno, result) {
-    const id = cardId(alumno.nombre);
+  function renderCard(i) {
+    const { alumno, result, estado } = cards[i];
     const gc = gradeClass(result.nota);
-    const mejoras = result.propuestas_mejora.map((m, i) =>
-      `<li><span class="mejora-num">${i+1}.</span>${esc(m)}</li>`).join('');
-    return `<div class="student-card" id="${id}">
-      <div class="card-header">
-        <div class="student-name">${esc(alumno.nombre)}</div>
-        <div class="grade-badge g-${gc}">
-          <span class="grade-num">${result.nota.toFixed(1)}</span>
-          <span class="grade-label">${esc(result.nota_texto)}</span>
-        </div>
-      </div>
+    const mejoras = result.propuestas_mejora.map((m, j) =>
+      `<li><span class="mejora-num">${j + 1}.</span>${esc(m)}</li>`).join('');
+    const atencion = result.legible === false;
+    const aprobada = estado === 'aprobada';
+    const puedeAprobar = tareaDestino() && alumno.id;
+    return `<div class="student-card${atencion ? ' card-atencion' : ''}${aprobada ? ' aprobada' : ''}" id="card-${i}">
+      ${cabeceraCard(alumno, `
+        <div class="grade-badge g-${gc}" id="badge-${i}">
+          <input class="nota-edit" id="nota-${i}" type="number" min="0" max="10" step="0.1"
+            value="${Number(result.nota).toFixed(1)}" onchange="onNotaEditada(${i})" title="Puedes cambiar la nota">
+          <span class="grade-label" id="notaTexto-${i}">${esc(result.nota_texto)}</span>
+        </div>`)}
+      ${atencion ? '<div class="atencion-badge">⚠️ No se ha podido leer bien: revísalo</div>' : ''}
       <div class="card-body">
         <div class="card-section">
-          <h4>Comentario detallado</h4>
-          <p>${esc(result.comentario)}</p>
+          <h4>Comentario <span style="font-weight:400;text-transform:none;letter-spacing:0;">(puedes editarlo)</span></h4>
+          <textarea class="card-textarea" id="comentario-${i}">${esc(result.comentario)}</textarea>
         </div>
         <div class="card-section">
           <h4>Propuestas de mejora</h4>
@@ -951,63 +1458,119 @@
         </div>
       </div>
       <div class="card-footer">
-        <button class="btn btn-secondary btn-sm" onclick="skipCard('${id}')">Omitir</button>
-        <button class="btn btn-success btn-sm" id="emailBtn-${id}" onclick="onSendEmail('${id}', this)">
-          📧 Enviar feedback por email
-        </button>
+        <button class="btn btn-secondary btn-sm" onclick="copiarFeedback(${i})">📋 Copiar</button>
+        ${alumno.email && alumno.id ? `<button class="btn btn-secondary btn-sm" id="emailBtn-${i}" onclick="onSendEmail(${i}, this)">📧 Enviar</button>` : ''}
+        ${puedeAprobar
+          ? `<button class="btn btn-success btn-sm" id="aprobarBtn-${i}" onclick="aprobar(${i})" ${aprobada ? 'disabled' : ''}>${aprobada ? '✔ Guardada' : '✔ Aprobar y guardar'}</button>`
+          : ''}
       </div>
     </div>`;
   }
 
-  function renderErrorCard(alumno, errorMsg) {
-    const id = cardId(alumno.nombre);
-    return `<div class="student-card card-error" id="${id}">
-      <div class="card-header">
-        <div class="student-name">${esc(alumno.nombre)}</div>
-        <span class="no-sub-badge">⚠️ Error</span>
-      </div>
-      <div class="error-body">⚠️ ${esc(errorMsg)}</div>
-      <div class="card-footer">
-        <button class="btn btn-secondary btn-sm" onclick="skipCard('${id}')">Omitir</button>
-      </div>
+  function renderErrorCard(i, titulo, errorMsg) {
+    return `<div class="student-card card-error" id="card-${i}">
+      ${cabeceraCard(cards[i].alumno, `<span class="no-sub-badge">${esc(titulo)}</span>`)}
+      <div class="error-body">${esc(errorMsg)}</div>
     </div>`;
   }
 
-  function renderNotFoundCard(alumno) {
-    const id = cardId(alumno.nombre);
-    return `<div class="student-card card-error" id="${id}">
-      <div class="card-header">
-        <div class="student-name">${esc(alumno.nombre)}</div>
-        <span class="no-sub-badge">Sin entrega</span>
-      </div>
-      <div class="error-body">No se encontró ningún archivo para esta tarea en el ZIP.</div>
-      <div class="card-footer">
-        <button class="btn btn-secondary btn-sm" onclick="skipCard('${id}')">Omitir</button>
-      </div>
-    </div>`;
+  function pintarCard(i, html) {
+    document.getElementById('card-' + i).outerHTML = html;
   }
 
-  /* ── Acciones de tarjeta ── */
-  function skipCard(id) {
-    document.getElementById(id)?.classList.toggle('skipped');
+  /* Lo que el profesor ha dejado en la tarjeta (nota y comentario editados) */
+  function resultadoFinal(i) {
+    const r = cards[i].result;
+    const nota = Math.round(Math.min(10, Math.max(0, parseFloat(document.getElementById('nota-' + i)?.value ?? r.nota))) * 10) / 10;
+    const comentario = document.getElementById('comentario-' + i)?.value ?? r.comentario;
+    return { ...r, nota, nota_texto: notaTexto(nota), comentario };
   }
 
-  async function onSendEmail(id, btn) {
-    const { alumno, result } = cardPayloads[id] || {};
-    if (!alumno || !result) return;
-    const taskName = document.getElementById('nombreTarea').value.trim();
+  function onNotaEditada(i) {
+    const input = document.getElementById('nota-' + i);
+    const nota = parseFloat(input.value);
+    if (isNaN(nota) || nota < 0 || nota > 10) { showToast('La nota debe estar entre 0 y 10', 'error'); return; }
+    document.getElementById('notaTexto-' + i).textContent = notaTexto(nota);
+    document.getElementById('badge-' + i).className = `grade-badge g-${gradeClass(nota)}`;
+  }
+
+  function textoFeedback(i) {
+    const r = resultadoFinal(i);
+    const tarea = document.getElementById('nombreTarea').value.trim();
+    return `${tarea}\n\nNota: ${r.nota.toFixed(1)} (${r.nota_texto})\n\n${r.comentario}\n\nPara mejorar:\n` +
+      r.propuestas_mejora.map((m, j) => `${j + 1}. ${m}`).join('\n') +
+      `\n\n${r.mensaje_motivador}` + (perfil?.nombre ? `\n\n${perfil.nombre}` : '');
+  }
+
+  async function copiarFeedback(i) {
+    try {
+      await navigator.clipboard.writeText(textoFeedback(i));
+      showToast('📋 Feedback copiado', 'success');
+    } catch (_) {
+      showToast('No se pudo copiar. Selecciona el texto a mano.', 'error');
+    }
+  }
+
+  async function onSendEmail(i, btn) {
+    const { alumno } = cards[i];
     btn.disabled = true;
     btn.innerHTML = '<div class="btn-spinner"></div> Enviando…';
     try {
-      await sendEmail(alumno, result, taskName);
+      await api('enviar-feedback', {
+        alumno_id: alumno.id,
+        tarea: document.getElementById('nombreTarea').value.trim(),
+        resultado: resultadoFinal(i),
+      });
       btn.innerHTML = '✅ Enviado';
-      btn.style.background = '#059669';
-      showToast(`Email enviado a ${alumno.nombre}`, 'success');
-    } catch(e) {
+      showToast(`Feedback enviado a ${alumno.nombre}`, 'success');
+    } catch (e) {
       btn.disabled = false;
-      btn.innerHTML = '📧 Enviar feedback por email';
-      showToast('Error al enviar: ' + e.message, 'error');
+      btn.innerHTML = '📧 Enviar';
+      showToast(e.message, e.codigo === 'EMAIL_SIN_CONFIGURAR' ? 'warning' : 'error');
     }
+  }
+
+  /* Paso 3: la corrección aprobada va a la tabla notas con origen='markmate' */
+  async function aprobar(i, silencioso = false) {
+    const tareaId = tareaDestino();
+    const { alumno } = cards[i];
+    if (!tareaId || !alumno.id) return false;
+    const r = resultadoFinal(i);
+    if (isNaN(r.nota)) { showToast(`Nota no válida para ${alumno.nombre}`, 'error'); return false; }
+
+    const { error } = await sbClient.from('notas').upsert({
+      alumno_id: alumno.id,
+      tarea_id: tareaId,
+      nota: r.nota,
+      comentario_ia: r.comentario,
+      mejoras_ia: r.propuestas_mejora.join('\n'),
+      mensaje_motivador: r.mensaje_motivador,
+      origen: 'markmate',
+      corregido_at: new Date().toISOString(),
+    }, { onConflict: 'alumno_id,tarea_id' });
+
+    if (error) { showToast(`No se pudo guardar la nota de ${alumno.nombre}: ${error.message}`, 'error'); return false; }
+    cards[i].estado = 'aprobada';
+    const card = document.getElementById('card-' + i);
+    card.classList.add('aprobada');
+    const btn = document.getElementById('aprobarBtn-' + i);
+    if (btn) { btn.disabled = true; btn.textContent = '✔ Guardada'; }
+    if (!silencioso) showToast(`✔ Nota de ${alumno.nombre} guardada en el cuaderno`, 'success');
+    return true;
+  }
+
+  async function aprobarTodas() {
+    const pendientes = cards
+      .map((c, i) => ({ c, i }))
+      .filter(({ c }) => c.result && c.estado !== 'aprobada' && c.result.legible !== false);
+    const revisar = cards.filter(c => c.result && c.estado !== 'aprobada' && c.result.legible === false).length;
+    if (!pendientes.length) return showToast('No hay correcciones pendientes de aprobar', 'warning');
+    if (!confirm(`Se guardarán ${pendientes.length} notas en el cuaderno.` +
+      (revisar ? `\n\nLas ${revisar} marcadas con ⚠️ no se incluyen: revísalas una a una.` : ''))) return;
+
+    let guardadas = 0;
+    for (const { i } of pendientes) if (await aprobar(i, true)) guardadas++;
+    showToast(`✔ ${guardadas} ${guardadas === 1 ? 'nota guardada' : 'notas guardadas'} en el cuaderno`, 'success');
   }
 
   /* ── Progreso ── */
@@ -1017,105 +1580,152 @@
     document.getElementById('progressFill').style.width = total ? Math.round(current / total * 100) + '%' : '0%';
   }
 
-  function renderStats(ok, err, total) {
+  function renderStats() {
+    const ok = cards.filter(c => c.result).length;
+    const atencion = cards.filter(c => c.result?.legible === false).length;
+    const err = cards.filter(c => c.estado === 'error').length;
+    const sinEntrega = cards.filter(c => c.estado === 'sin-entrega').length;
     document.getElementById('statsBar').innerHTML = `
       <div class="stat-chip"><span class="dot dot-green"></span> ${ok} corregidos</div>
-      ${err ? `<div class="stat-chip"><span class="dot dot-red"></span> ${err} errores</div>` : ''}
-      <div class="stat-chip"><span class="dot dot-gray"></span> ${total} total</div>`;
+      ${atencion ? `<div class="stat-chip">⚠️ ${atencion} para revisar</div>` : ''}
+      ${sinEntrega ? `<div class="stat-chip"><span class="dot dot-gray"></span> ${sinEntrega} sin entrega</div>` : ''}
+      ${err ? `<div class="stat-chip"><span class="dot dot-red"></span> ${err} con error</div>` : ''}`;
+    document.getElementById('btnAprobarTodas').classList.toggle('hidden', !(tareaDestino() && ok));
   }
 
-  /* ── FUNCIÓN PRINCIPAL ── */
+  /* Las que necesitan atención, arriba */
+  function ordenarPorAtencion() {
+    const grid = document.getElementById('cardsGrid');
+    const peso = c => (c.result?.legible === false ? 0 : c.estado === 'error' ? 1 : c.result ? 2 : 3);
+    cards.map((c, i) => ({ i, p: peso(c) }))
+      .sort((a, b) => a.p - b.p || a.i - b.i)
+      .forEach(({ i }) => grid.appendChild(document.getElementById('card-' + i)));
+  }
+
+  /* ══════════════════════════════════════
+     FUNCIÓN PRINCIPAL
+  ══════════════════════════════════════ */
   async function corregirClase() {
     if (isProcessing) return;
 
-    const zipFile    = document.getElementById('zipFile').files[0];
-    const excelFile  = document.getElementById('excelFile').files[0];
-    const taskName   = document.getElementById('nombreTarea').value.trim();
-    const rubrica    = document.getElementById('rubrica').value.trim();
-    const curso      = document.getElementById('cursoForm').value;
+    const zipFile  = document.getElementById('zipFile').files[0];
+    const grupoId  = document.getElementById('selGrupo').value;
+    const taskName = document.getElementById('nombreTarea').value.trim();
+    const rubrica  = document.getElementById('rubrica').value.trim();
+    const curso    = document.getElementById('cursoForm').value;
 
-    if (!zipFile)   return showToast('Sube el ZIP de Teams', 'error');
-    if (!excelFile) return showToast('Sube el Excel de alumnos', 'error');
-    if (!taskName)  return showToast('Escribe el nombre exacto de la tarea', 'error');
-    if (!rubrica)   return showToast('Escribe la rúbrica de corrección', 'error');
+    if (!zipFile)   return showToast('Sube el ZIP con las entregas', 'error');
+    if (!taskName)  return showToast('Escribe el nombre de la tarea', 'error');
+    if (!rubrica)   return showToast('Escribe la rúbrica o pulsa «Proponer rúbrica»', 'error');
 
-    /* Reparar alumnosData si el Excel se cargó antes */
-    if (!alumnosData.length) {
-      try { alumnosData = await parseExcel(excelFile); } catch(e) {
-        return showToast('Error al leer el Excel: ' + e.message, 'error');
-      }
+    let alumnos;
+    if (grupoId) {
+      if (!alumnosGrupoSel.length) return showToast('Este grupo no tiene alumnos. Impórtalos desde el Cuaderno.', 'error');
+      if (!tareaDestino()) return showToast('Elige la tarea del cuaderno (o crea una nueva)', 'error');
+      alumnos = alumnosGrupoSel;
+    } else {
+      const excelFile = document.getElementById('excelFile').files[0];
+      if (!excelFile) return showToast('Sube el Excel de alumnos o elige un grupo del cuaderno', 'error');
+      if (!alumnosData.length) await onExcelSelected(document.getElementById('excelFile'));
+      if (!alumnosData.length) return showToast('El Excel no tiene alumnos', 'error');
+      alumnos = alumnosData;
     }
-    if (!alumnosData.length) return showToast('El Excel no tiene alumnos', 'error');
+
+    if (perfil && perfil.creditos < alumnos.length &&
+        !confirm(`Tienes ${perfil.creditos} correcciones y la clase tiene ${alumnos.length} alumnos. Se corregirán hasta agotar el saldo. ¿Continuar?`)) return;
+
+    /* La rúbrica se queda guardada en la tarea para la próxima vez */
+    if (tareaDestino()) {
+      sbClient.from('tareas').update({ rubrica }).eq('id', tareaDestino()).then(({ error }) => {
+        const t = tareasGrupoSel.find(t => t.id === tareaDestino());
+        if (!error && t) t.rubrica = rubrica;
+      });
+    }
 
     isProcessing = true;
-    cardPayloads = {};
+    cards = alumnos.map(alumno => ({ alumno, result: null, estado: 'pendiente' }));
     const btn = document.getElementById('btnCorregir');
     btn.disabled = true;
-    btn.innerHTML = '<div class="btn-spinner"></div> Procesando…';
+    btn.innerHTML = '<div class="btn-spinner"></div> Corrigiendo…';
 
     document.getElementById('progressSection').classList.remove('hidden');
     document.getElementById('resultsSection').classList.remove('hidden');
-    document.getElementById('cardsGrid').innerHTML = '';
+    document.getElementById('btnAprobarTodas').classList.add('hidden');
+    document.getElementById('cardsGrid').innerHTML = cards.map((_, i) => renderSkeletonCard(i)).join('');
 
-    let ok = 0, err = 0;
-    const total = alumnosData.length;
+    const total = cards.length;
+    let hechas = 0;
+    let sinCreditos = false;
 
     try {
-      updateProgress('Cargando ZIP…', 0, total);
-      const zip = await loadZip(zipFile);
+      updateProgress('Abriendo el ZIP…', 0, total);
+      const zip = await JSZip.loadAsync(zipFile);
+      const rutas = filtrarPorTarea(
+        Object.keys(zip.files).filter(r => !zip.files[r].dir && EXT_VALIDAS.test(r) && !r.startsWith('__MACOSX')),
+        taskName);
 
-      for (let i = 0; i < total; i++) {
-        const alumno = alumnosData[i];
-        const id = cardId(alumno.nombre);
+      let siguiente = 0;
+      async function trabajador() {
+        while (siguiente < total) {
+          const i = siguiente++;
+          const { alumno } = cards[i];
 
-        /* Mostrar skeleton mientras se procesa */
-        document.getElementById('cardsGrid').insertAdjacentHTML('beforeend', renderSkeletonCard(alumno));
+          if (sinCreditos) {
+            cards[i].estado = 'error';
+            pintarCard(i, renderErrorCard(i, 'Sin correcciones', 'Se agotó el saldo antes de llegar a este alumno.'));
+            continue;
+          }
 
-        updateProgress(`Corrigiendo: ${alumno.nombre}`, i, total);
-
-        try {
-          const fileInfo = await findStudentFile(zip, alumno.nombre, taskName);
-
-          if (!fileInfo) {
-            document.getElementById(id)?.remove();
-            document.getElementById('cardsGrid').insertAdjacentHTML('beforeend', renderNotFoundCard(alumno));
-            err++;
-          } else {
-            if (fileInfo.sizeMB > 3.3) {
-              showToast(`⚠️ ${alumno.nombre}: archivo de ${fileInfo.sizeMB}MB, puede superar el límite`, 'warning');
+          try {
+            const rutasAlumno = buscarArchivosAlumno(rutas, alumno.nombre);
+            if (!rutasAlumno.length) {
+              cards[i].estado = 'sin-entrega';
+              pintarCard(i, renderErrorCard(i, 'Sin entrega', 'No hay ningún archivo de este alumno en el ZIP.'));
+              continue;
             }
 
-            const result = await corregirAlumno({
-              archivo_base64: fileInfo.base64,
-              tipo_archivo:   fileInfo.tipo,
+            document.querySelector(`#card-${i} .skeleton-body span`).textContent = 'Corrigiendo…';
+            const archivo = await leerArchivoZip(zip, rutasAlumno[0]);
+            if (archivo.sizeMB > MAX_MB_ARCHIVO) {
+              cards[i].estado = 'error';
+              pintarCard(i, renderErrorCard(i, 'Archivo grande',
+                `El PDF ocupa ${archivo.sizeMB.toFixed(1)} MB y el máximo es ${MAX_MB_ARCHIVO} MB. Exporta el PDF comprimido o como fotos.`));
+              continue;
+            }
+
+            const result = await api('corregir', {
+              archivo_base64: archivo.base64,
+              tipo_archivo:   archivo.tipo,
               nombre_alumno:  alumno.nombre,
               curso,
               nombre_tarea:   taskName,
               rubrica,
             });
-
-            cardPayloads[id] = { alumno, result };
-            document.getElementById(id)?.remove();
-            document.getElementById('cardsGrid').insertAdjacentHTML('beforeend', renderCard(alumno, result));
-            ok++;
+            if (typeof result.creditos_restantes === 'number') pintarCreditos(result.creditos_restantes);
+            cards[i].result = result;
+            cards[i].estado = 'corregida';
+            pintarCard(i, renderCard(i));
+          } catch (e) {
+            if (e.codigo === 'SIN_CREDITOS') sinCreditos = true;
+            cards[i].estado = 'error';
+            pintarCard(i, renderErrorCard(i, e.codigo === 'SIN_CREDITOS' ? 'Sin correcciones' : '⚠️ Error', e.message));
+          } finally {
+            hechas++;
+            updateProgress(`Corrigiendo… (${CORRECCIONES_EN_PARALELO} a la vez)`, hechas, total);
           }
-        } catch(e) {
-          document.getElementById(id)?.remove();
-          document.getElementById('cardsGrid').insertAdjacentHTML('beforeend', renderErrorCard(alumno, e.message));
-          err++;
         }
-
-        updateProgress(`Corrigiendo: ${alumno.nombre}`, i + 1, total);
-
-        /* Pausa entre llamadas para no saturar la API */
-        if (i < total - 1) await new Promise(r => setTimeout(r, 1000));
       }
 
-      updateProgress('✅ Corrección completada', total, total);
-      renderStats(ok, err, total);
-      showToast(`Listo: ${ok} corregidos${err ? `, ${err} sin entrega/error` : ''}`, ok ? 'success' : 'warning');
+      await Promise.all(Array.from({ length: CORRECCIONES_EN_PARALELO }, trabajador));
 
-    } catch(e) {
+      updateProgress('✅ Corrección completada', total, total);
+      renderStats();
+      ordenarPorAtencion();
+      const corregidas = cards.filter(c => c.result).length;
+      showToast(`Listo: ${corregidas} de ${total} corregidas`, corregidas ? 'success' : 'warning');
+      if (sinCreditos) abrirCompra('Te has quedado sin correcciones a mitad de la clase. Compra un bono y vuelve a lanzar solo los que faltan.');
+
+    } catch (e) {
       showToast('Error inesperado: ' + e.message, 'error');
     } finally {
       isProcessing = false;
@@ -1123,11 +1733,6 @@
       btn.innerHTML = '🚀 Corregir clase';
     }
   }
-
-  /* ── Setup ── */
-  setupDropzone('zipZone',   'zipFile',   /\.zip$/i,         onZipSelected);
-  setupDropzone('excelZone', 'excelFile', /\.(xlsx|xls)$/i,  onExcelSelected);
-  loadConfig();
 
   /* ══════════════════════════════════════
      CUADERNO
@@ -1151,14 +1756,14 @@
       const { data, error } = await sbClient.from('v_resumen_grupo').select('*').order('grupo_nombre');
       if (error) throw error;
       if (!data || !data.length) {
-        grid.innerHTML = '<div class="cuaderno-empty">No hay grupos todavía.</div>';
+        grid.innerHTML = '<div class="cuaderno-empty">Todavía no tienes grupos. Crea el primero con «+ Nuevo grupo».</div>';
         return;
       }
       grid.innerHTML = data.map(renderGrupoCard).join('');
       grid.querySelectorAll('.grupo-card').forEach(card =>
         card.addEventListener('click', () => abrirGrupo(card.dataset.grupoId, card.dataset.grupoNombre))
       );
-    } catch(e) {
+    } catch (e) {
       grid.innerHTML = `<div class="cuaderno-empty">Error al cargar grupos: ${esc(e.message)}</div>`;
     }
   }
@@ -1166,9 +1771,10 @@
   function renderGrupoCard(g) {
     const media = g.media_general != null ? Number(g.media_general).toFixed(1) : '—';
     const gc    = g.media_general != null ? gradeClass(Number(g.media_general)) : '';
-    return `<div class="grupo-card" data-grupo-id="${g.grupo_id}" data-grupo-nombre="${esc(g.grupo_nombre)}">
+    const nivel = CURSOS.find(([v]) => v === g.nivel)?.[1] || g.nivel || '';
+    return `<div class="grupo-card" data-grupo-id="${esc(g.grupo_id)}" data-grupo-nombre="${esc(g.grupo_nombre)}">
       <div class="grupo-card-name">${esc(g.grupo_nombre)}</div>
-      <div class="grupo-card-nivel">${esc(g.nivel || '')}${g.anio_academico ? ' · ' + esc(g.anio_academico) : ''}</div>
+      <div class="grupo-card-nivel">${esc(nivel)}${g.anio_academico ? ' · ' + esc(g.anio_academico) : ''}</div>
       <div class="grupo-stats">
         <div class="grupo-stat">
           <span class="grupo-stat-val">${g.total_alumnos ?? '—'}</span>
@@ -1186,6 +1792,117 @@
     </div>`;
   }
 
+  function anioAcademicoActual() {
+    const d = new Date();
+    const y = d.getMonth() >= 7 ? d.getFullYear() : d.getFullYear() - 1;
+    return `${y}-${y + 1}`;
+  }
+
+  function modalNuevoGrupo() {
+    abrirModal(`
+      <h3>Nuevo grupo</h3>
+      <form onsubmit="crearGrupo(event)" style="display:flex;flex-direction:column;gap:14px;">
+        <div class="form-group">
+          <label for="ngNombre">Nombre</label>
+          <input type="text" id="ngNombre" required placeholder="Ej: 3.º ESO A">
+        </div>
+        <div class="form-group">
+          <label for="ngNivel">Curso</label>
+          <select id="ngNivel">${CURSOS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>
+        </div>
+        <div class="form-group">
+          <label for="ngAnio">Año académico</label>
+          <input type="text" id="ngAnio" value="${anioAcademicoActual()}">
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="cerrarModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary btn-sm">Crear grupo</button>
+        </div>
+      </form>`);
+    document.getElementById('ngNivel').value = localStorage.getItem('curso') || '1ESO';
+  }
+
+  async function crearGrupo(ev) {
+    ev.preventDefault();
+    const { error } = await sbClient.from('grupos').insert({
+      nombre: document.getElementById('ngNombre').value.trim(),
+      nivel: document.getElementById('ngNivel').value,
+      anio_academico: document.getElementById('ngAnio').value.trim(),
+    });
+    if (error) return showToast('No se pudo crear el grupo: ' + error.message, 'error');
+    cerrarModal();
+    showToast('✅ Grupo creado. Ahora importa sus alumnos.', 'success');
+    await cargarGrupos();
+    await cargarGruposSelector();
+  }
+
+  function modalNuevaTarea(grupoId = grupoActual?.id, titulo = '') {
+    if (!grupoId) return showToast('Elige primero un grupo', 'error');
+    abrirModal(`
+      <h3>Nueva tarea</h3>
+      <form onsubmit="crearTarea(event, '${esc(grupoId)}')" style="display:flex;flex-direction:column;gap:14px;">
+        <div class="form-group">
+          <label for="ntTitulo">Título</label>
+          <input type="text" id="ntTitulo" required value="${esc(titulo)}" placeholder="Ej: Libreta semana 12">
+        </div>
+        <div class="form-group">
+          <label for="ntEval">Evaluación</label>
+          <select id="ntEval">
+            <option value="1">1.ª evaluación</option>
+            <option value="2">2.ª evaluación</option>
+            <option value="3">3.ª evaluación</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="cerrarModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary btn-sm">Crear tarea</button>
+        </div>
+      </form>`);
+    const mes = new Date().getMonth();
+    document.getElementById('ntEval').value = mes >= 8 ? '1' : mes <= 2 ? '2' : '3';
+  }
+
+  async function crearTarea(ev, grupoId) {
+    ev.preventDefault();
+    const { data, error } = await sbClient.from('tareas').insert({
+      grupo_id: grupoId,
+      titulo: document.getElementById('ntTitulo').value.trim(),
+      evaluacion: document.getElementById('ntEval').value,
+    }).select('id').single();
+    if (error) return showToast('No se pudo crear la tarea: ' + error.message, 'error');
+    cerrarModal();
+    showToast('✅ Tarea creada', 'success');
+
+    if (document.getElementById('selGrupo').value === grupoId) {
+      await onGrupoChange();
+      document.getElementById('selTarea').value = data.id;
+      onTareaChange();
+    }
+    if (grupoActual?.id === grupoId) await cargarDatosGrupo(grupoId);
+  }
+
+  async function importarAlumnos(input) {
+    const file = input.files[0];
+    input.value = '';
+    if (!file || !grupoActual) return;
+    try {
+      const filas = await parseExcel(file);
+      const { data: existentes } = await sbClient.from('alumnos').select('nombre,apellidos').eq('grupo_id', grupoActual.id);
+      const ya = new Set((existentes || []).map(a => norm(`${a.nombre} ${a.apellidos || ''}`).trim()));
+      const nuevos = filas
+        .filter(f => !ya.has(norm(`${f.nombre} ${f.apellidos}`).trim()))
+        .map(f => ({ grupo_id: grupoActual.id, nombre: f.nombre, apellidos: f.apellidos || null, email: f.email || null, activo: true }));
+      if (!nuevos.length) return showToast('Todos los alumnos del Excel ya estaban en el grupo', 'warning');
+      const { error } = await sbClient.from('alumnos').insert(nuevos);
+      if (error) throw error;
+      showToast(`✅ ${nuevos.length} alumnos importados`, 'success');
+      await cargarDatosGrupo(grupoActual.id);
+      if (document.getElementById('selGrupo').value === grupoActual.id) await onGrupoChange();
+    } catch (e) {
+      showToast('Error al importar: ' + e.message, 'error');
+    }
+  }
+
   /* ── Abrir grupo ── */
   async function abrirGrupo(grupoId, grupoNombre) {
     grupoActual     = { id: grupoId, nombre: grupoNombre };
@@ -1201,7 +1918,7 @@
 
     try {
       await cargarDatosGrupo(grupoId);
-    } catch(e) {
+    } catch (e) {
       document.getElementById('cuaderno-tabla-wrapper').innerHTML =
         `<div class="cuaderno-empty">Error al cargar: ${esc(e.message)}</div>`;
     }
@@ -1214,10 +1931,12 @@
     cellsDirty     = new Set();
     document.getElementById('cuaderno-alumnos').classList.add('hidden');
     document.getElementById('cuaderno-grupos').classList.remove('hidden');
+    cargarGrupos();
   }
 
   /* ── Carga de datos ── */
   async function cargarDatosGrupo(grupoId) {
+    notasCache = {};
     const [{ data: alumnos, error: eA }, { data: tareas, error: eT }] = await Promise.all([
       sbClient.from('alumnos')
         .select('id,nombre,apellidos')
@@ -1235,21 +1954,21 @@
 
     if (!alumnos || !alumnos.length) {
       document.getElementById('cuaderno-tabla-wrapper').innerHTML =
-        '<div class="cuaderno-empty">Este grupo no tiene alumnos activos.</div>';
+        '<div class="cuaderno-empty">Este grupo no tiene alumnos todavía. Impórtalos con «📥 Importar alumnos (Excel)».</div>';
       return;
     }
 
     tareasActuales = tareas || [];
 
-    if (alumnos.length && tareasActuales.length) {
+    if (tareasActuales.length) {
       const { data: nd, error: eN } = await sbClient
         .from('notas')
-        .select('alumno_id,tarea_id,nota,faltas')
+        .select('alumno_id,tarea_id,nota,faltas,origen')
         .in('alumno_id', alumnos.map(a => a.id))
         .in('tarea_id',  tareasActuales.map(t => t.id));
       if (eN) throw eN;
       (nd || []).forEach(n => {
-        notasCache[`${n.alumno_id}_${n.tarea_id}`] = { nota: n.nota, faltas: n.faltas };
+        notasCache[`${n.alumno_id}_${n.tarea_id}`] = { nota: n.nota, faltas: n.faltas, origen: n.origen };
       });
     }
 
@@ -1260,23 +1979,24 @@
   function renderTablaAlumnos(alumnos) {
     if (!tareasActuales.length) {
       document.getElementById('cuaderno-tabla-wrapper').innerHTML =
-        '<div class="cuaderno-empty">Este grupo no tiene tareas creadas.</div>';
+        `<div class="cuaderno-empty">${alumnos.length} alumnos. Todavía no hay tareas: crea una con «+ Nueva tarea».</div>`;
       return;
     }
 
     const cols = tareasActuales.map(t =>
-      `<th title="${esc(t.titulo)}">${esc(t.titulo.length > 18 ? t.titulo.slice(0, 16) + '…' : t.titulo)}${t.evaluacion ? `<br><small style="font-weight:400;font-size:10px;color:var(--text-muted)">${esc(t.evaluacion)}</small>` : ''}</th>`
+      `<th title="${esc(t.titulo)}">${esc(t.titulo.length > 18 ? t.titulo.slice(0, 16) + '…' : t.titulo)}${t.evaluacion ? `<br><small style="font-weight:400;font-size:10px;color:var(--text-muted)">${esc(/^\d$/.test(String(t.evaluacion)) ? t.evaluacion + '.ª ev.' : t.evaluacion)}</small>` : ''}</th>`
     ).join('');
 
     const rows = alumnos.map(a => {
       const cells = tareasActuales.map(t => {
-        const key   = `${a.id}_${t.id}`;
-        const n     = notasCache[key] || {};
-        const nota  = n.nota   != null ? n.nota   : '';
+        const key    = `${a.id}_${t.id}`;
+        const n      = notasCache[key] || {};
+        const nota   = n.nota   != null ? n.nota   : '';
         const faltas = n.faltas != null ? n.faltas : '';
+        const ia     = n.origen === 'markmate';
         return `<td><div class="cell-inputs">
-          <input class="input-nota" type="number" min="0" max="10" step="0.1"
-            value="${nota}" placeholder="—"
+          <input class="input-nota${ia ? ' origen-ia' : ''}" type="number" min="0" max="10" step="0.1"
+            value="${nota}" placeholder="—" ${ia ? 'title="Corregida con el corrector y aprobada por ti"' : ''}
             data-alumno="${a.id}" data-tarea="${t.id}" data-campo="nota"
             onchange="onInputChange(this)" onblur="guardarNota(this)">
           <span class="faltas-label">F</span>
@@ -1329,8 +2049,8 @@
     const key      = `${alumnoId}_${tareaId}`;
     if (!cellsDirty.has(key)) return;
 
-    const cached   = notasCache[key] || {};
-    const notaVal  = cached.nota   != null ? Number(cached.nota)   : null;
+    const cached    = notasCache[key] || {};
+    const notaVal   = cached.nota   != null ? Number(cached.nota)   : null;
     const faltasVal = cached.faltas != null ? Number(cached.faltas) : null;
 
     if (notaVal === null && faltasVal === null) { cellsDirty.delete(key); return; }
@@ -1339,9 +2059,11 @@
       return;
     }
 
+    /* Si la nota venía del corrector y el profesor la cambia, pasa a ser manual */
     const payload = { alumno_id: alumnoId, tarea_id: tareaId, origen: 'manual' };
     if (notaVal   !== null) payload.nota   = notaVal;
     if (faltasVal !== null) payload.faltas = faltasVal;
+    if (input.dataset.campo === 'faltas' && cached.origen === 'markmate') payload.origen = 'markmate';
 
     try {
       const { error } = await sbClient
@@ -1350,6 +2072,8 @@
       if (error) throw error;
 
       cellsDirty.delete(key);
+      cached.origen = payload.origen;
+      if (input.dataset.campo === 'nota') input.classList.toggle('origen-ia', payload.origen === 'markmate');
       input.classList.add('saved');
       setTimeout(() => input.classList.remove('saved'), 1500);
 
@@ -1360,10 +2084,12 @@
         mediaCell.textContent = media !== null ? media.toFixed(1) : '—';
         mediaCell.className   = `media-cell g-${gc}`;
       }
-    } catch(e) {
+    } catch (e) {
       showToast('Error al guardar: ' + e.message, 'error');
     }
   }
+
+  iniciar();
 </script>
 </body>
 </html>

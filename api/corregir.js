@@ -1,19 +1,24 @@
 import Anthropic from '@anthropic-ai/sdk';
+import {
+  ErrorHttp, prepararRespuesta, registrarUso, responderError, sbAdmin, usuarioDeLaPeticion,
+} from '../lib/servidor.js';
 
 const client = new Anthropic();
+const MODELO = 'claude-sonnet-5';
 
-const CURSOS_VALIDOS = ['1ESO', '2ESO', '3ESO', '4ESO'];
+const CURSOS_VALIDOS = ['1PRI', '2PRI', '3PRI', '4PRI', '5PRI', '6PRI', '1ESO', '2ESO', '3ESO', '4ESO'];
 const TIPOS_ARCHIVO_VALIDOS = ['pdf', 'jpeg', 'jpg', 'png', 'gif', 'webp'];
 
-// Prompt en caché: estable en todas las peticiones, se cachea automáticamente
-const SYSTEM_PROMPT = `Eres un profesor/a corrector/a de tareas de alumnos de ESO en la Comunitat Valenciana. \
+const SYSTEM_PROMPT = `Eres un profesor/a corrector/a de tareas de alumnos de Primaria y ESO en España. \
 Tu misión es evaluar el trabajo del alumno según la rúbrica proporcionada y ofrecer un feedback \
-constructivo, detallado y motivador, adaptado a su edad y nivel.
+constructivo, detallado y motivador, adaptado a su edad y nivel. Tu corrección es una propuesta: \
+el profesor la revisará antes de que llegue al alumno.
 
 Directrices:
 - Sé justo/a y riguroso/a: aplica la rúbrica con criterio
-- Adapta el lenguaje al nivel: 1ESO y 2ESO (12-13 años), 3ESO y 4ESO (14-15 años)
-- En el comentario, cita partes concretas del texto del alumno
+- Adapta el lenguaje a la edad: 1PRI-2PRI (6-7 años), 3PRI-4PRI (8-9), 5PRI-6PRI (10-11), 1ESO-2ESO (12-13), 3ESO-4ESO (14-15)
+- En el comentario, cita partes concretas del trabajo del alumno. No inventes citas: si no puedes leer bien el trabajo \
+(foto borrosa, letra ilegible, páginas cortadas), dilo claramente en el comentario
 - Las propuestas de mejora deben ser específicas, accionables y ordenadas por importancia
 - El mensaje motivador debe ser auténtico, cálido y realista — evita frases vacías
 
@@ -39,7 +44,7 @@ const OUTPUT_SCHEMA = {
       type: 'string',
       description:
         'Análisis detallado del trabajo según cada criterio de la rúbrica. ' +
-        'Menciona aciertos y puntos débiles con ejemplos concretos del texto.',
+        'Menciona aciertos y puntos débiles con ejemplos concretos del trabajo.',
     },
     propuestas_mejora: {
       type: 'array',
@@ -49,135 +54,129 @@ const OUTPUT_SCHEMA = {
     mensaje_motivador: {
       type: 'string',
       description:
-        'Mensaje breve (2-3 frases) dirigido directamente al alumno, ' +
-        'cálido y adaptado a adolescentes de ESO.',
+        'Mensaje breve (2-3 frases) dirigido directamente al alumno, cálido y adaptado a su edad.',
+    },
+    legible: {
+      type: 'boolean',
+      description: 'false si no se ha podido leer bien el trabajo (foto borrosa, ilegible, incompleta)',
     },
   },
-  required: ['nota', 'nota_texto', 'comentario', 'propuestas_mejora', 'mensaje_motivador'],
+  required: ['nota', 'nota_texto', 'comentario', 'propuestas_mejora', 'mensaje_motivador', 'legible'],
   additionalProperties: false,
 };
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (prepararRespuesta(req, res)) return;
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Método no permitido. Usa POST.' });
-  }
-
-  const body = req.body ?? {};
-  const { texto_tarea, archivo_base64, tipo_archivo, nombre_alumno, curso, nombre_tarea, rubrica } = body;
-
-  const camposFaltantes = ['nombre_alumno', 'curso', 'nombre_tarea', 'rubrica']
-    .filter((campo) => !body[campo] || String(body[campo]).trim() === '');
-
-  if (camposFaltantes.length > 0) {
-    return res.status(400).json({
-      error: `Faltan campos obligatorios: ${camposFaltantes.join(', ')}`,
-    });
-  }
-
-  const tieneTexto = texto_tarea && String(texto_tarea).trim() !== '';
-  const tieneArchivo = archivo_base64 && String(archivo_base64).trim() !== '';
-
-  if (!tieneTexto && !tieneArchivo) {
-    return res.status(400).json({
-      error: 'Debes enviar texto_tarea o archivo_base64 (con tipo_archivo).',
-    });
-  }
-
-  if (tieneArchivo) {
-    if (!tipo_archivo || String(tipo_archivo).trim() === '') {
-      return res.status(400).json({ error: 'Se requiere tipo_archivo cuando se envía archivo_base64.' });
-    }
-    if (!TIPOS_ARCHIVO_VALIDOS.includes(tipo_archivo)) {
-      return res.status(400).json({
-        error: `El campo "tipo_archivo" debe ser uno de: ${TIPOS_ARCHIVO_VALIDOS.join(', ')}`,
-      });
-    }
-  }
-
-  if (!CURSOS_VALIDOS.includes(curso)) {
-    return res.status(400).json({
-      error: `El campo "curso" debe ser uno de: ${CURSOS_VALIDOS.join(', ')}`,
-    });
-  }
-
-  const textoPreamble =
-    `Corrige la tarea de **${nombre_alumno}** (${curso}).\n\n` +
-    `**Nombre de la tarea:** ${nombre_tarea}\n\n` +
-    `**Rúbrica de corrección:**\n${rubrica}\n\n` +
-    `**Texto del alumno:**`;
-
-  let userContent;
-
-  if (tieneArchivo) {
-    const bloqueArchivo =
-      tipo_archivo === 'pdf'
-        ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: archivo_base64 } }
-        : { type: 'image', source: { type: 'base64', media_type: tipo_archivo === 'jpg' ? 'image/jpeg' : `image/${tipo_archivo}`, data: archivo_base64 } };
-
-    userContent = [{ type: 'text', text: textoPreamble }, bloqueArchivo];
-  } else {
-    userContent = `${textoPreamble}\n${texto_tarea}`;
-  }
+  let user = null;
+  let creditoConsumido = false;
 
   try {
+    user = await usuarioDeLaPeticion(req);
+
+    const body = req.body ?? {};
+    const { texto_tarea, archivo_base64, tipo_archivo, nombre_alumno, curso, nombre_tarea, rubrica } = body;
+
+    const camposFaltantes = ['nombre_alumno', 'curso', 'nombre_tarea', 'rubrica']
+      .filter((campo) => !body[campo] || String(body[campo]).trim() === '');
+    if (camposFaltantes.length > 0) {
+      throw new ErrorHttp(400, `Faltan campos obligatorios: ${camposFaltantes.join(', ')}`);
+    }
+
+    // Límites para que una sola corrección no cueste mucho más de lo que se cobra
+    const LIMITES = { nombre_alumno: 120, nombre_tarea: 200, rubrica: 6000, texto_tarea: 40000 };
+    const demasiadoLargo = Object.entries(LIMITES).find(([campo, max]) => String(body[campo] ?? '').length > max);
+    if (demasiadoLargo) {
+      throw new ErrorHttp(400, `El campo "${demasiadoLargo[0]}" es demasiado largo (máximo ${demasiadoLargo[1]} caracteres).`);
+    }
+
+    const tieneTexto = texto_tarea && String(texto_tarea).trim() !== '';
+    const tieneArchivo = archivo_base64 && String(archivo_base64).trim() !== '';
+    if (!tieneTexto && !tieneArchivo) {
+      throw new ErrorHttp(400, 'Debes enviar texto_tarea o archivo_base64 (con tipo_archivo).');
+    }
+    if (tieneArchivo && !TIPOS_ARCHIVO_VALIDOS.includes(tipo_archivo)) {
+      throw new ErrorHttp(400, `El campo "tipo_archivo" debe ser uno de: ${TIPOS_ARCHIVO_VALIDOS.join(', ')}`);
+    }
+    if (!CURSOS_VALIDOS.includes(curso)) {
+      throw new ErrorHttp(400, `El campo "curso" debe ser uno de: ${CURSOS_VALIDOS.join(', ')}`);
+    }
+
+    // Cobrar antes de llamar a la IA; se devuelve si algo falla.
+    const { data: restantes, error: errCredito } = await sbAdmin().rpc('consumir_credito', { p_user: user.id });
+    if (errCredito) throw errCredito;
+    if (restantes === null) {
+      throw new ErrorHttp(402, 'No te quedan correcciones. Compra un bono para seguir.', 'SIN_CREDITOS');
+    }
+    creditoConsumido = true;
+
+    // Bloque estable para toda la clase (tarea + rúbrica): va primero y se cachea.
+    // Lo que cambia por alumno va detrás, para no romper el prefijo cacheado.
+    const bloqueRubrica = {
+      type: 'text',
+      text:
+        `**Nombre de la tarea:** ${nombre_tarea}\n` +
+        `**Curso:** ${curso}\n\n` +
+        `**Rúbrica de corrección:**\n${rubrica}`,
+      cache_control: { type: 'ephemeral' },
+    };
+    const bloqueAlumno = { type: 'text', text: `Corrige la tarea de **${nombre_alumno}**. Su trabajo:` };
+
+    let bloqueTrabajo;
+    if (tieneArchivo) {
+      bloqueTrabajo = tipo_archivo === 'pdf'
+        ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: archivo_base64 } }
+        : {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: tipo_archivo === 'jpg' ? 'image/jpeg' : `image/${tipo_archivo}`,
+              data: archivo_base64,
+            },
+          };
+    } else {
+      bloqueTrabajo = { type: 'text', text: String(texto_tarea) };
+    }
+
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
-      system: [
-        {
-          type: 'text',
-          text: SYSTEM_PROMPT,
-          cache_control: { type: 'ephemeral' },
-        },
-      ],
-      output_config: {
-        format: {
-          type: 'json_schema',
-          schema: OUTPUT_SCHEMA,
-        },
-      },
-      messages: [
-        {
-          role: 'user',
-          content: userContent,
-        },
-      ],
+      model: MODELO,
+      max_tokens: 16000,
+      system: SYSTEM_PROMPT,
+      output_config: { format: { type: 'json_schema', schema: OUTPUT_SCHEMA } },
+      messages: [{ role: 'user', content: [bloqueRubrica, bloqueAlumno, bloqueTrabajo] }],
     });
 
     if (response.stop_reason === 'refusal') {
-      return res.status(422).json({
-        error: 'El modelo no pudo procesar la corrección. Revisa el contenido enviado.',
-      });
+      throw new ErrorHttp(422, 'El modelo no pudo procesar esta corrección. Revisa el contenido enviado.');
+    }
+    if (response.stop_reason === 'max_tokens') {
+      throw new ErrorHttp(502, 'La corrección salió demasiado larga y se cortó. Inténtalo de nuevo.');
     }
 
     const textBlock = response.content.find((b) => b.type === 'text');
-    if (!textBlock) {
-      throw new Error('Respuesta inesperada del modelo: sin bloque de texto');
-    }
-
+    if (!textBlock) throw new Error('Respuesta inesperada del modelo: sin bloque de texto');
     const resultado = JSON.parse(textBlock.text);
-    return res.status(200).json(resultado);
-  } catch (error) {
-    console.error('[antescorregIA] Error:', error?.message ?? error);
 
-    if (error instanceof Anthropic.AuthenticationError) {
-      return res.status(500).json({ error: 'Error de autenticación con la API de Anthropic. Revisa ANTHROPIC_API_KEY.' });
+    await registrarUso(user.id, 'correccion', MODELO, response.usage, true);
+    return res.status(200).json({ ...resultado, creditos_restantes: restantes });
+  } catch (error) {
+    if (creditoConsumido) {
+      const { error: errDevolucion } = await sbAdmin().rpc('devolver_credito', { p_user: user.id });
+      if (errDevolucion) console.error('[corregir] No se pudo devolver el crédito:', errDevolucion.message);
+      await registrarUso(user.id, 'correccion', MODELO, null, false);
     }
+
     if (error instanceof Anthropic.RateLimitError) {
-      return res.status(429).json({ error: 'Límite de peticiones alcanzado. Inténtalo de nuevo en unos segundos.' });
+      return res.status(429).json({ error: 'Demasiadas correcciones a la vez. Espera unos segundos.' });
     }
     if (error instanceof Anthropic.BadRequestError) {
-      return res.status(400).json({ error: 'Petición inválida. Revisa los datos enviados.' });
+      console.error('[corregir] BadRequest:', error.message);
+      return res.status(400).json({ error: 'El archivo no se pudo procesar (¿formato o tamaño?).' });
     }
-
-    return res.status(500).json({ error: 'Error interno al procesar la corrección.' });
+    if (error instanceof Anthropic.AuthenticationError) {
+      console.error('[corregir] Clave de Anthropic inválida');
+      return res.status(500).json({ error: 'Error de configuración del servidor.' });
+    }
+    return responderError(res, error, 'corregir');
   }
 }
