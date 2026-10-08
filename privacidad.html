@@ -39,12 +39,17 @@
     <ul>
       <li><strong>De ti, como docente:</strong> tu correo electrónico (para entrar), el nombre con el que firmas el feedback, tu saldo de correcciones y el historial de compras.</li>
       <li><strong>De tus alumnos, porque tú los introduces:</strong> nombre, apellidos, correo si lo añades, las notas y los comentarios de corrección que apruebas. Solo tú puedes verlos.</li>
-      <li><strong>Los trabajos que subes para corregir:</strong> se envían al servicio de inteligencia artificial para generar la propuesta de corrección y <strong>no se guardan</strong> en nuestra base de datos. Solo se guarda la corrección que tú apruebas.</li>
+      <li><strong>Los trabajos que subes tú desde tu ordenador</strong> (ZIP de la plataforma o escaneo de libretas): se envían al servicio de inteligencia artificial para generar la propuesta de corrección y <strong>no se guardan</strong>. Las pegatinas QR se leen en tu propio navegador.</li>
+      <li><strong>Los trabajos que tus alumnos entregan por el enlace de la tarea o por el buzón de correo del grupo:</strong> se guardan en un almacén privado, cifrado y que solo tú puedes ver, hasta que apruebas su corrección; en ese momento se borran. Si no llegas a aprobarla, se borran a los <strong>60 días</strong>. Del alumno solo se guarda de quién de tu lista es y, si lo envió por correo, su dirección.</li>
+      <li><strong>La propuesta de corrección</strong> queda guardada hasta que la apruebas o la descartas. Como nota solo se guarda la que tú apruebas.</li>
       <li><strong>Datos de uso:</strong> cuántas correcciones haces y su coste técnico, para facturar y mejorar el servicio.</li>
     </ul>
 
     <h2>Tu papel respecto a los datos de tus alumnos</h2>
     <p>Respecto a los datos de tus alumnos, actuamos como <strong>encargado del tratamiento</strong>: los tratamos solo para prestarte el servicio y siguiendo tus instrucciones. Te corresponde asegurarte de que puedes usarlos con esta finalidad conforme a la normativa y a las indicaciones de tu centro. Recomendamos no incluir en los trabajos datos que no sean necesarios para corregirlos.</p>
+
+    <h2>Si eres alumno y entregas por el enlace</h2>
+    <p>En la página de entrega ves el nombre y la inicial del apellido de tus compañeros (o su primer apellido, si dos coinciden), para elegir el tuyo. Tu trabajo solo lo ve tu profesor o profesora. Si tienes dudas sobre tus datos, pregúntale a tu docente o escríbenos a <span class="pendiente">[CORREO DE CONTACTO]</span>.</p>
 
     <h2>Decisiones automatizadas</h2>
     <p>La aplicación <strong>propone</strong> una nota y un comentario. Ninguna nota se guarda ni se comunica al alumno sin que el docente la revise y la apruebe expresamente, y el docente puede modificarla. No se toman decisiones basadas únicamente en un tratamiento automatizado.</p>
@@ -53,10 +58,10 @@
     <p>Usamos proveedores que tratan datos por cuenta nuestra:</p>
     <ul>
       <li><strong>Anthropic</strong> (corrección con IA). Recibe el trabajo del alumno, el nombre que aparece en él y tu rúbrica. Según sus condiciones comerciales, no usa los datos de la API para entrenar sus modelos. <a href="https://www.anthropic.com/legal/privacy" rel="noopener">Política de Anthropic</a>.</li>
-      <li><strong>Supabase</strong> (base de datos y acceso), región <span class="pendiente">[REGIÓN]</span>.</li>
+      <li><strong>Supabase</strong> (base de datos, acceso y almacén de las entregas), región <span class="pendiente">[REGIÓN]</span>.</li>
       <li><strong>Vercel</strong> (alojamiento de la web).</li>
       <li><strong>Stripe</strong> (pagos). No vemos ni guardamos los datos de tu tarjeta.</li>
-      <li><strong>Resend</strong> (envío del feedback por correo, solo si lo usas).</li>
+      <li><strong>Resend</strong> (envío del feedback por correo y buzón de entregas del grupo, solo si los usas).</li>
     </ul>
     <p>Algunos de estos proveedores pueden tratar datos fuera del Espacio Económico Europeo, con las garantías previstas en el RGPD (cláusulas contractuales tipo o decisiones de adecuación).</p>
 

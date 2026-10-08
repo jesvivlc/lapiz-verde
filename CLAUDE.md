@@ -7,9 +7,11 @@ Empezó como herramienta personal de un profesor; se está convirtiendo en produ
 ## Estructura
 lapiz-verde/
 ├── index.html            ← frontend completo (en la raíz, NO mover)
+├── entregar.html         ← página pública del alumno (enlace de entrega, sin cuenta)
 ├── privacidad.html       ← privacidad y aviso legal (borrador con [HUECOS])
-├── api/                  ← funciones de Vercel: corregir, rubrica, checkout, stripe-webhook, enviar-feedback
-├── lib/servidor.js       ← utilidades compartidas del servidor
+├── api/                  ← funciones de Vercel: corregir, corregir-entregas, entrega (pública), correo-entrante,
+│                           cron-nocturno, rubrica, checkout, stripe-webhook, enviar-feedback
+├── lib/                  ← servidor.js (Supabase, sesión, errores), correccion.js (IA), entregas.js (almacén)
 ├── supabase/migrations/  ← SQL que se ejecuta a mano en el panel de Supabase, en orden
 ├── supabase/tests/       ← test de migraciones y RLS (PGlite)
 ├── tests/                ← tests de API (red simulada) y e2e (Playwright)
@@ -34,6 +36,10 @@ lapiz-verde/
 - `perfiles` (id = auth.users.id, email, nombre, creditos) — se crea sola al registrarse
 - `pagos` (user_id, stripe_session_id único, creditos, importe_cents)
 - `uso_ia` (user_id, tipo, modelo, tokens…) — coste real por corrección
+- `entregas` (owner_id, tarea_id, alumno_id o null, canal 'enlace'|'correo', ruta en el almacén, estado, resultado de la IA…) — lo recibido; solo la crea el servidor
+- `lotes_ia` — lotes de la corrección nocturna (solo servidor)
+- `tareas` añade token_entrega, entrega_abierta, correccion_auto · `grupos` añade buzon
+- Almacén (Storage) privado `entregas`: `<owner_id>/<tarea_id>/<entrega_id>.<ext>`; se borra al aprobar o a los 60 días
 - Vistas: `v_media_alumno_evaluacion`, `v_resumen_grupo` (con security_invoker)
 - UNIQUE en notas: (alumno_id, tarea_id)
 - Campo origen: 'manual' | 'markmate' ('markmate' = corrección de la IA aprobada por el profesor)
