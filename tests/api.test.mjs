@@ -97,6 +97,12 @@ globalThis.fetch = async (url, init = {}) => {
     const nombres = [...almacen.keys()].filter((k) => k.startsWith(body.prefix + '/')).map((k) => k.slice(body.prefix.length + 1));
     return json(nombres.filter((n) => !body.search || n.includes(body.search)).map((name) => ({ name })));
   }
+  if (u.pathname.startsWith('/storage/v1/object/entregas/') && metodo === 'POST') {
+    almacen.set(decodeURIComponent(u.pathname.slice('/storage/v1/object/entregas/'.length)), init.body);
+    return json({ Key: 'entregas/x' });
+  }
+  if (u.host === 'api.resend.com' && u.pathname.startsWith('/emails/receiving/')) return json({ object: 'list', data: estado.adjuntos ?? [] });
+  if (u.host === 'cdn.resend.test') return new Response(Buffer.alloc(Number(u.searchParams.get('bytes') || 100)));
   if (u.pathname.startsWith('/storage/v1/object/entregas/')) {
     const ruta = decodeURIComponent(u.pathname.slice('/storage/v1/object/entregas/'.length));
     return almacen.has(ruta) ? new Response(almacen.get(ruta)) : json({ error: 'not found' }, 400);
@@ -298,6 +304,64 @@ ok(res.statusCode === 400 && estado.creditos === 5 && tablas.entregas[0].estado 
 conEntregas(); res = respuesta();
 await corregirEntregas(peticion({ token: null, body: cuerpoCE }), res);
 ok(res.statusCode === 401, 'sin sesión → 401');
+
+console.log('== /api/correo-entrante (buzón del grupo) ==');
+process.env.RESEND_WEBHOOK_SECRET = 'whsec_' + Buffer.from('secreto-de-prueba-123').toString('base64');
+const { default: correo, firmaValida, elegirTarea, direccion } = await import('../api/correo-entrante.js');
+const crypto = await import('node:crypto');
+function avisoFirmado(evento, { secreto = process.env.RESEND_WEBHOOK_SECRET, ts = Math.floor(Date.now() / 1000) } = {}) {
+  const cuerpo = JSON.stringify(evento);
+  const clave = Buffer.from(secreto.replace(/^whsec_/, ''), 'base64');
+  const firma = crypto.createHmac('sha256', clave).update(`msg_1.${ts}.${cuerpo}`).digest('base64');
+  const req = Readable.from([Buffer.from(cuerpo)]);
+  req.method = 'POST';
+  req.headers = { 'svix-id': 'msg_1', 'svix-timestamp': String(ts), 'svix-signature': `v1,${firma}` };
+  return req;
+}
+const BUZON = '3-eso-a-5e7200f543';
+const correoDe = (from, subject, extra = {}) => ({ type: 'email.received', data: { email_id: 'em-1', from, to: [`${BUZON}@entregas.lapizverde.com`], subject, ...extra } });
+function conBuzon() {
+  reiniciar();
+  tablas.grupos[0].buzon = BUZON;
+  tablas.alumnos.find((a) => a.id === A1).email = 'Ana.Lopez@alumnos.es';
+  tablas.tareas.push({ id: '20000000-0000-4000-8000-000000000002', owner_id: U1, grupo_id: G1, titulo: 'Redacción', entrega_abierta: false, created_at: '2026-10-09' });
+  estado.adjuntos = [
+    { id: 'at1', filename: 'pagina1.jpg', size: 300000, content_type: 'image/jpeg', content_disposition: 'attachment', download_url: 'https://cdn.resend.test/at1?bytes=300000' },
+    { id: 'at2', filename: 'logo.png', size: 3000, content_type: 'image/png', content_disposition: 'inline', download_url: 'https://cdn.resend.test/at2?bytes=3000' },
+    { id: 'at3', filename: 'virus.exe', size: 1000, content_type: 'application/x-msdownload', content_disposition: 'attachment', download_url: 'https://cdn.resend.test/at3' },
+    { id: 'at4', filename: 'trabajo.pdf', size: 900000, content_type: 'application/pdf', content_disposition: 'attachment', download_url: 'https://cdn.resend.test/at4?bytes=900000' },
+  ];
+}
+ok(direccion('Ana López <Ana.Lopez@Alumnos.es>') === 'ana.lopez@alumnos.es', 'saca la dirección del remitente');
+const tareasP = [{ id: 1, titulo: 'Libreta', entrega_abierta: false }, { id: 2, titulo: 'Libreta semana 12', entrega_abierta: false }, { id: 3, titulo: 'Otra', entrega_abierta: true }];
+ok(elegirTarea(tareasP, 'Re: libreta SEMANA 12 de Ana')?.id === 2 && elegirTarea(tareasP, 'mi trabajo')?.id === 3, 'tarea por el asunto (la más específica); si no, la última abierta');
+
+conBuzon(); res = respuesta();
+await correo(avisoFirmado(correoDe('Ana López <ana.lopez@alumnos.es>', 'Libreta semana 12')), res);
+ok(res.statusCode === 200 && res.cuerpo.recibidos === 2 && res.cuerpo.identificado === true, 'guarda la foto y el PDF (no el logo ni el .exe) y reconoce a Ana por su correo');
+ok(tablas.entregas.every((e) => e.alumno_id === A1 && e.tarea_id === T1 && e.estado === 'pendiente' && e.canal === 'correo' && e.correo_id === 'em-1'), 'entregas pendientes de Ana en «Libreta semana 12»');
+ok(tablas.entregas.every((e) => almacen.has(e.ruta) && e.ruta.startsWith(`${U1}/${T1}/`)), 'archivos en la carpeta del profesor');
+res = respuesta();
+await correo(avisoFirmado(correoDe('ana.lopez@alumnos.es', 'Libreta semana 12')), res);
+ok(res.cuerpo.ignorado === 'ya recibido' && tablas.entregas.length === 2, 'si Resend repite el aviso, no se duplica');
+
+conBuzon(); res = respuesta();
+await correo(avisoFirmado(correoDe('desconocido@gmail.com', 'redacción')), res);
+ok(res.cuerpo.recibidos === 2 && tablas.entregas.every((e) => e.alumno_id === null && e.remitente === 'desconocido@gmail.com' && e.tarea_id === '20000000-0000-4000-8000-000000000002'),
+  'remitente desconocido → «sin identificar», en la tarea del asunto aunque esté cerrada');
+
+conBuzon(); res = respuesta();
+await correo(avisoFirmado(correoDe('ana.lopez@alumnos.es', 'hola'), { secreto: 'whsec_' + Buffer.from('otro').toString('base64') }), res);
+ok(res.statusCode === 401 && tablas.entregas.length === 0, 'firma falsa → 401 y no guarda nada');
+conBuzon(); res = respuesta();
+await correo(avisoFirmado(correoDe('ana.lopez@alumnos.es', 'hola'), { ts: Math.floor(Date.now() / 1000) - 3600 }), res);
+ok(res.statusCode === 401, 'aviso de hace una hora (reenviado) → 401');
+conBuzon(); res = respuesta();
+await correo(avisoFirmado({ ...correoDe('a@b.es', 'x'), data: { ...correoDe('a@b.es', 'x').data, to: ['no-existe-123456@entregas.lapizverde.com'] } }), res);
+ok(res.statusCode === 200 && res.cuerpo.ignorado === 'buzón desconocido' && tablas.entregas.length === 0, 'buzón que no existe → se ignora');
+conBuzon(); estado.adjuntos = []; res = respuesta();
+await correo(avisoFirmado(correoDe('ana.lopez@alumnos.es', 'Libreta semana 12')), res);
+ok(res.cuerpo.ignorado === 'sin adjuntos válidos', 'correo sin adjuntos → se ignora');
 
 console.log(fails ? `\n${fails} FALLOS` : '\nTodo correcto');
 process.exit(fails ? 1 : 0);

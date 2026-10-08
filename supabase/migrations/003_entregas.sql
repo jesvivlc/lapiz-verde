@@ -54,6 +54,7 @@ create table if not exists public.entregas (
   mime           text,
   bytes          integer,
   remitente      text,                -- correo de quien lo envió (canal correo)
+  correo_id      text,                -- id del correo en Resend: evita duplicados si el aviso llega dos veces
   estado         text not null default 'subiendo'
                  check (estado in ('subiendo', 'pendiente', 'corrigiendo', 'corregida', 'aprobada', 'error', 'descartada')),
   resultado      jsonb,               -- propuesta de la IA, pendiente de que el profesor la apruebe
@@ -63,9 +64,11 @@ create table if not exists public.entregas (
   created_at     timestamptz not null default now(),
   corregida_at   timestamptz
 );
+alter table public.entregas add column if not exists correo_id text;
 create index if not exists entregas_tarea_alumno_idx on public.entregas (tarea_id, alumno_id);
 create index if not exists entregas_owner_estado_idx on public.entregas (owner_id, estado);
 create index if not exists entregas_lote_idx         on public.entregas (lote_id);
+create index if not exists entregas_correo_idx       on public.entregas (correo_id);
 
 alter table public.entregas enable row level security;
 

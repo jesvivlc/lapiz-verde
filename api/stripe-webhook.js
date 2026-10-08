@@ -1,15 +1,9 @@
 // Stripe avisa aquí cuando un pago se completa. Suma los créditos una sola vez por sesión.
 import Stripe from 'stripe';
-import { sbAdmin } from '../lib/servidor.js';
+import { cuerpoSinProcesar, sbAdmin } from '../lib/servidor.js';
 
 // La firma se verifica sobre el cuerpo sin procesar
 export const config = { api: { bodyParser: false } };
-
-async function cuerpoSinProcesar(req) {
-  const trozos = [];
-  for await (const trozo of req) trozos.push(typeof trozo === 'string' ? Buffer.from(trozo) : trozo);
-  return Buffer.concat(trozos);
-}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
