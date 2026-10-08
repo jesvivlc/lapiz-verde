@@ -1,7 +1,12 @@
 {
   "functions": {
-    "api/corregir.js": {
-      "maxDuration": 120
-    }
-  }
+    "api/corregir.js": { "maxDuration": 120 },
+    "api/corregir-entregas.js": { "maxDuration": 120 },
+    "api/correo-entrante.js": { "maxDuration": 60 },
+    "api/cron-nocturno.js": { "maxDuration": 300 }
+  },
+  "crons": [
+    { "path": "/api/cron-nocturno?fase=enviar", "schedule": "0 0 * * *" },
+    { "path": "/api/cron-nocturno?fase=recoger", "schedule": "0 5 * * *" }
+  ]
 }

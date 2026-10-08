@@ -82,16 +82,16 @@ La clave: **las plataformas ya dejan las entregas en carpetas con el nombre del 
 
 | | Tarea | Permisos necesarios |
 |---|---|---|
-| ✅ | Arrastrar ZIP / ficheros a la página | Ninguno |
-| ⬜ | Tabla `entregas` + ingestor genérico "fichero + ruta → alumno + tarea" | — |
-| ⬜ | Bandeja "¿de quién es esto?" para entregas sin identificar | — |
-| ⬜ | Enlace de entrega por tarea: el alumno sube su trabajo directamente | Ninguno |
-| ⬜ | Buzón de correo por grupo (`grupo-x7k2@entregas.dominio`), identificación por remitente contra `alumnos.email` | Ninguno. Necesita proveedor con correo entrante (Mailgun, Postmark, SendGrid) |
-| ⬜ | Pegatinas QR por alumno (PDF imprimible) + lectura de QR en el servidor | Ninguno |
+| ✅ | Arrastrar ZIP / ficheros a la página (ahora con todas las fotos de cada alumno) | Ninguno |
+| 🔧 | Tabla `entregas` + almacén privado: todos los canales escriben ahí | — |
+| 🔧 | Bandeja en el corrector: resumen, «sin identificar» (asignar o descartar), «Ver trabajo» | — |
+| 🔧 | Enlace de entrega por tarea (`entregar.html`), con QR para proyectar en clase | Ninguno |
+| 🔧 | Buzón de correo por grupo (`grupo-x7k2@entregas.lapizverde.com`), identificación por remitente contra `alumnos.email`, tarea por el asunto | Ninguno. Resend Receiving (MX de `entregas.lapizverde.com`) |
+| 🔧 | Pegatinas QR por alumno (hoja imprimible 3×8) + lectura en el navegador (pdf.js + jsQR); una pegatina abre las páginas de cada alumno | Ninguno |
 | ⬜ | Peldaño A: el profesor comparte la carpeta con `corrector@dominio` (cuenta propia) | Que el centro permita compartir fuera |
 | ⬜ | Peldaño C: carpeta sincronizada leída desde el navegador (File System Access API) | Ninguno |
 | ⬜ | Peldaño B: OAuth de ficheros (no de tareas educativas) | Consentimiento de usuario |
-| ⬜ | Carpeta nueva → aviso "¿qué rúbrica?" → corrección nocturna con Batch API (-50%) | — |
+| 🔧 | Corrección nocturna con Batch API (-50%) para tareas con «Corregir sola por la noche»; limpieza de archivos (al aprobar, o a los 60 días) | Variable `CRON_SECRET` |
 | ⬜ | Exportar notas: CSV para ITACA y hoja de calificación externa de Moodle | Ninguno |
 
 **Verificar antes de construir** (Bruno):

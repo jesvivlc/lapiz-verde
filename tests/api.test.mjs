@@ -44,6 +44,7 @@ function filtrar(filas, params) {
       const x = f[k];
       if (op === 'eq') return String(x) === val;
       if (op === 'gte') return String(x) >= val;
+      if (op === 'lt') return String(x) < val;
       if (op === 'in') return val.replace(/^\(|\)$/g, '').split(',').map((s) => s.replace(/^"|"$/g, '')).includes(String(x));
       if (op === 'is') return x == null;
       if (op === 'not') return x != null;   // solo se usa not.is.null
@@ -79,13 +80,17 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.pathname.startsWith('/rest/v1/')) {
     const tabla = u.pathname.slice('/rest/v1/'.length);
     tablas[tabla] ??= [];
+    const unaFila = (new Headers(init.headers).get('accept') || '').includes('vnd.pgrst.object');
     if (metodo === 'POST') {
-      const nuevas = (Array.isArray(body) ? body : [body]).map((f) => ({ created_at: new Date().toISOString(), ...f }));
+      const porDefecto = { lotes_ia: { estado: 'enviado' } }[tabla] ?? {};
+      const nuevas = (Array.isArray(body) ? body : [body])
+        .map((f) => ({ id: globalThis.crypto.randomUUID(), created_at: new Date().toISOString(), ...porDefecto, ...f }));
       tablas[tabla].push(...nuevas);
-      return json(nuevas, 201);
+      return json(unaFila ? nuevas[0] : nuevas, 201);
     }
     const filas = filtrar(tablas[tabla], u.searchParams);
     if (metodo === 'PATCH') { filas.forEach((f) => Object.assign(f, body)); return json(filas); }
+    if (metodo === 'DELETE') { tablas[tabla] = tablas[tabla].filter((f) => !filas.includes(f)); return json(filas); }
     if (metodo === 'HEAD') return new Response(null, { status: 200, headers: { 'content-range': `*/${filas.length}` } });
     return json(filas);
   }
@@ -101,11 +106,30 @@ globalThis.fetch = async (url, init = {}) => {
     almacen.set(decodeURIComponent(u.pathname.slice('/storage/v1/object/entregas/'.length)), init.body);
     return json({ Key: 'entregas/x' });
   }
+  if (u.pathname === '/storage/v1/object/entregas' && metodo === 'DELETE') {
+    body.prefixes.forEach((r) => almacen.delete(r));
+    return json(body.prefixes.map((name) => ({ name })));
+  }
   if (u.host === 'api.resend.com' && u.pathname.startsWith('/emails/receiving/')) return json({ object: 'list', data: estado.adjuntos ?? [] });
   if (u.host === 'cdn.resend.test') return new Response(Buffer.alloc(Number(u.searchParams.get('bytes') || 100)));
   if (u.pathname.startsWith('/storage/v1/object/entregas/')) {
     const ruta = decodeURIComponent(u.pathname.slice('/storage/v1/object/entregas/'.length));
     return almacen.has(ruta) ? new Response(almacen.get(ruta)) : json({ error: 'not found' }, 400);
+  }
+  if (u.host === 'api.anthropic.com' && u.pathname === '/v1/messages/batches' && metodo === 'POST') {
+    estado.lote = body;
+    return json({ id: 'msgbatch_1', type: 'message_batch', processing_status: 'in_progress' });
+  }
+  if (u.host === 'api.anthropic.com' && u.pathname === '/v1/messages/batches/msgbatch_1') {
+    return json({ id: 'msgbatch_1', type: 'message_batch', processing_status: estado.loteTerminado ? 'ended' : 'in_progress',
+      results_url: estado.loteTerminado ? 'https://api.anthropic.com/v1/messages/batches/msgbatch_1/results' : null });
+  }
+  if (u.host === 'api.anthropic.com' && u.pathname === '/v1/messages/batches/msgbatch_1/results') {
+    const lineas = estado.lote.requests.map((r) => JSON.stringify((estado.loteFallos ?? []).includes(r.custom_id)
+      ? { custom_id: r.custom_id, result: { type: 'errored', error: { type: 'error', error: { type: 'invalid_request_error', message: 'imagen rota' } } } }
+      : { custom_id: r.custom_id, result: { type: 'succeeded', message: { id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5', stop_reason: 'end_turn',
+          content: [{ type: 'text', text: JSON.stringify(respuestaIA) }], usage: { input_tokens: 2000, output_tokens: 400 } } } }));
+    return new Response(lineas.join('\n') + '\n', { headers: { 'content-type': 'application/binary' } });
   }
   if (url.includes('api.anthropic.com')) {
     estado.anthropicBody = body;
@@ -362,6 +386,68 @@ ok(res.statusCode === 200 && res.cuerpo.ignorado === 'buzón desconocido' && tab
 conBuzon(); estado.adjuntos = []; res = respuesta();
 await correo(avisoFirmado(correoDe('ana.lopez@alumnos.es', 'Libreta semana 12')), res);
 ok(res.cuerpo.ignorado === 'sin adjuntos válidos', 'correo sin adjuntos → se ignora');
+
+console.log('== /api/cron-nocturno (Batch API) ==');
+const { default: cron } = await import('../api/cron-nocturno.js');
+const peticionCron = (fase, secreto = 'cron-secreto') => peticion({ metodo: 'GET', token: null, query: { fase }, headers: { authorization: `Bearer ${secreto}` } });
+const T2 = '20000000-0000-4000-8000-000000000009';
+function conNocturna() {
+  reiniciar();
+  tablas.grupos[0].nivel = '3ESO';
+  Object.assign(tablas.tareas[0], { correccion_auto: true, rubrica: '- Contenido (10 pts)' });
+  tablas.tareas.push({ id: T2, owner_id: U1, grupo_id: G1, titulo: 'Sin nocturna', correccion_auto: false, rubrica: 'x' });
+  const e = (id, alumno, tarea, estadoE = 'pendiente', extra = {}) => ({ id, owner_id: U1, tarea_id: tarea, alumno_id: alumno, ruta: `${U1}/${tarea}/${id}.jpg`, mime: 'image/jpeg', bytes: 10, estado: estadoE, created_at: '2026-10-08T10:00:00Z', ...extra });
+  tablas.entregas = [
+    e('e0000000-0000-4000-8000-00000000000a', A1, T1), e('e0000000-0000-4000-8000-00000000000b', A1, T1),
+    e('e0000000-0000-4000-8000-00000000000c', A2, T1),
+    e('e0000000-0000-4000-8000-00000000000d', A1, T2),                         // tarea sin nocturna
+    e('e0000000-0000-4000-8000-00000000000e', null, T1),                       // sin identificar
+  ];
+  tablas.entregas.forEach((x) => almacen.set(x.ruta, Buffer.from('foto')));
+  tablas.lotes_ia = [];
+}
+delete process.env.CRON_SECRET;
+conNocturna(); res = respuesta();
+await cron(peticionCron('enviar'), res);
+ok(res.statusCode === 503, 'sin CRON_SECRET configurado → 503');
+process.env.CRON_SECRET = 'cron-secreto';
+conNocturna(); res = respuesta();
+await cron(peticionCron('enviar', 'otro'), res);
+ok(res.statusCode === 401 && !estado.lote, 'secreto equivocado → 401');
+
+conNocturna(); res = respuesta();
+await cron(peticionCron('enviar'), res);
+const reqs = estado.lote?.requests ?? [];
+ok(res.statusCode === 200 && res.cuerpo.enviados === 2 && reqs.length === 2, 'envía un lote con 2 alumnos (no la otra tarea ni lo sin identificar)');
+ok(reqs.every((r) => /^[0-9a-f]{32}$/.test(r.custom_id) && r.params.model === 'claude-sonnet-5'), 'peticiones con clave válida para la Batch API');
+ok(reqs.find((r) => r.params.messages[0].content[1].text.includes('Ana López García'))?.params.messages[0].content.length === 4, 'Ana: sus 2 fotos en la misma corrección');
+ok(estado.creditos === 3, 'cobra 1 corrección por alumno');
+ok(tablas.entregas.filter((x) => x.estado === 'corrigiendo').length === 3 && tablas.lotes_ia.length === 1, 'marca las entregas como «corrigiendo» y guarda el lote');
+
+conNocturna(); estado.creditos = 1; res = respuesta();
+await cron(peticionCron('enviar'), res);
+ok(res.cuerpo.enviados === 1 && tablas.entregas.filter((x) => x.estado === 'pendiente' && x.tarea_id === T1 && x.alumno_id).length > 0, 'sin saldo para todos: envía lo que puede y el resto se queda pendiente');
+
+conNocturna(); res = respuesta();
+await cron(peticionCron('enviar'), res);
+const loteGuardado = estado.lote; const creditosTrasEnviar = estado.creditos;
+res = respuesta();
+await cron(peticionCron('recoger'), res);
+ok(res.cuerpo.lotes_en_curso === 1 && tablas.entregas.filter((x) => x.estado === 'corrigiendo').length === 3, 'lote aún en marcha → no toca nada');
+estado.loteTerminado = true;
+estado.loteFallos = [loteGuardado.requests.find((r) => r.params.messages[0].content[1].text.includes('Lucas')).custom_id];
+tablas.entregas.push({ id: 'vieja', owner_id: U1, tarea_id: T1, alumno_id: A1, ruta: `${U1}/${T1}/vieja.jpg`, estado: 'aprobada', created_at: '2026-10-01' },
+  { id: 'abandonada', owner_id: U1, tarea_id: T1, alumno_id: A1, ruta: `${U1}/${T1}/abandonada.jpg`, estado: 'subiendo', created_at: '2020-01-01' });
+almacen.set(`${U1}/${T1}/vieja.jpg`, 'x');
+res = respuesta();
+await cron(peticionCron('recoger'), res);
+const anaE = tablas.entregas.filter((x) => x.alumno_id === A1 && x.tarea_id === T1 && x.lote_id);
+const lucasE = tablas.entregas.filter((x) => x.alumno_id === A2);
+ok(res.cuerpo.corregidas === 1 && anaE.every((x) => x.estado === 'corregida' && x.resultado?.nota === 7.5), 'Ana: propuesta guardada, lista para revisar por la mañana');
+ok(res.cuerpo.fallidas === 1 && lucasE.every((x) => x.estado === 'error') && estado.creditos === creditosTrasEnviar + 1, 'Lucas falló: queda con error y se le devuelve la corrección');
+ok(tablas.lotes_ia[0].estado === 'recogido' && tablas.uso_ia.some((u) => u.tipo === 'correccion_lote' && u.input_tokens === 2000), 'lote cerrado y coste registrado');
+ok(!almacen.has(`${U1}/${T1}/vieja.jpg`) && tablas.entregas.find((x) => x.id === 'vieja').ruta === null, 'borra el archivo de lo ya aprobado');
+ok(!tablas.entregas.some((x) => x.id === 'abandonada'), 'borra las subidas que nunca se completaron');
 
 console.log(fails ? `\n${fails} FALLOS` : '\nTodo correcto');
 process.exit(fails ? 1 : 0);
