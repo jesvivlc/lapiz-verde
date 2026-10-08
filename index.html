@@ -1881,7 +1881,7 @@
   }
 
   function enlaceEntrega(tarea) {
-    return `${location.origin}/entregar.html?t=${tarea.token_entrega}`;
+    return `${location.origin}/entregar.html#t=${tarea.token_entrega}`;   // en el fragmento: no llega a los registros del servidor
   }
 
   async function cargarBandeja() {

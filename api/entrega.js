@@ -13,7 +13,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_BYTES = 15 * 1024 * 1024;
 const MAX_POR_ALUMNO = 30;          // archivos por alumno y tarea, en total
 const MAX_POR_HORA_TAREA = 300;     // archivos por tarea en la última hora
-const MAX_SUBIENDO_TAREA = 60;      // subidas empezadas y sin confirmar a la vez, por tarea
+const MAX_SUBIENDO_TAREA = 120;     // subidas empezadas y sin confirmar (últimos 15 min), por tarea
+const MAX_SUBIENDO_ALUMNO = 10;     // … y por alumno: uno solo no puede agotar el cupo de la clase
 const CUENTAN_CUPO = ['pendiente', 'corrigiendo', 'corregida', 'error'];   // lo abandonado o descartado no gasta cupo
 const EXTENSION = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
 
@@ -71,14 +72,20 @@ async function preparar(body, res) {
   if (!alumno) throw new ErrorHttp(400, 'Elige tu nombre de la lista.');
 
   const haceUnaHora = new Date(Date.now() - 3600_000).toISOString();
-  const [{ count: delAlumno }, { count: ultimaHora }, { count: subiendo }] = await Promise.all([
+  const hace15 = new Date(Date.now() - 15 * 60_000).toISOString();
+  const [{ count: delAlumno }, { count: ultimaHora }, { count: subiendo }, { count: subiendoAlumno }] = await Promise.all([
     sbAdmin().from('entregas').select('id', { count: 'exact', head: true })
       .eq('tarea_id', tarea.id).eq('alumno_id', alumno.id).in('estado', CUENTAN_CUPO),
     sbAdmin().from('entregas').select('id', { count: 'exact', head: true })
       .eq('tarea_id', tarea.id).gte('created_at', haceUnaHora),
     sbAdmin().from('entregas').select('id', { count: 'exact', head: true })
-      .eq('tarea_id', tarea.id).eq('estado', 'subiendo').gte('created_at', haceUnaHora),
+      .eq('tarea_id', tarea.id).eq('estado', 'subiendo').gte('created_at', hace15),
+    sbAdmin().from('entregas').select('id', { count: 'exact', head: true })
+      .eq('tarea_id', tarea.id).eq('alumno_id', alumno.id).eq('estado', 'subiendo').gte('created_at', hace15),
   ]);
+  if ((subiendoAlumno ?? 0) + archivos.length > MAX_SUBIENDO_ALUMNO) {
+    throw new ErrorHttp(429, 'Tienes una entrega a medias. Espera un cuarto de hora o termina la que empezaste.');
+  }
   if ((delAlumno ?? 0) + archivos.length > MAX_POR_ALUMNO) {
     throw new ErrorHttp(429, 'Ya has entregado muchos archivos en esta tarea. Habla con tu profe.');
   }
@@ -106,7 +113,7 @@ async function preparar(body, res) {
 
   const subidas = [];
   for (const f of filas) {
-    const { data, error } = await sbAdmin().storage.from('entregas').createSignedUploadUrl(f.ruta);
+    const { data, error } = await sbAdmin().storage.from('entregas').createSignedUploadUrl(f.ruta, { upsert: false });
     if (error) throw error;
     subidas.push({ id: f.id, url: data.signedUrl, mime: f.mime });
   }

@@ -116,6 +116,9 @@ export default async function handler(req, res) {
       if (datos.length > MAX_BYTES) continue;
       const id = crypto.randomUUID();
       const ruta = `${grupo.owner_id}/${tarea.id}/${id}.${EXTENSION[a.content_type]}`;
+      // Se apunta para borrar antes de subir: si algo falla a medias, el archivo no queda huérfano
+      const { error: errApunte } = await sbAdmin().from('archivos_por_borrar').insert({ ruta });
+      if (errApunte) throw errApunte;
       const { error: errSubida } = await sbAdmin().storage.from('entregas').upload(ruta, datos, { contentType: a.content_type });
       if (errSubida) throw errSubida;
       const { error: errFila } = await sbAdmin().from('entregas').insert({
@@ -124,6 +127,7 @@ export default async function handler(req, res) {
         mime: a.content_type, bytes: datos.length, remitente: remitente.slice(0, 200), correo_id: correoId, estado: 'pendiente',
       });
       if (errFila) throw errFila;
+      await sbAdmin().from('archivos_por_borrar').delete().eq('ruta', ruta);
       recibidos++;
     }
     return res.status(200).json({ recibidos, identificado: !!alumno });

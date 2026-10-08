@@ -94,7 +94,8 @@
   const MAX_ARCHIVOS = 10;
   const MAX_LADO = 1568;            // por encima, la IA no gana detalle
   const MAX_BYTES = 15 * 1024 * 1024;
-  const token = new URLSearchParams(location.search).get('t') || '';
+  // El token va en el fragmento (#t=…): el navegador no lo envía al servidor ni queda en sus registros
+  const token = new URLSearchParams(location.hash.slice(1)).get('t') || new URLSearchParams(location.search).get('t') || '';
   let elegidos = [];                 // [{ file, url }]
 
   const $ = (id) => document.getElementById(id);
@@ -190,7 +191,7 @@
     form.append('', file);
     const resp = await fetch(url, {
       method: 'PUT',
-      headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY, 'x-upsert': 'false' },
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY },
       body: form,
     });
     if (!resp.ok) throw new Error(`No se pudo subir «${file.name}». Comprueba la conexión e inténtalo de nuevo.`);

@@ -315,9 +315,15 @@ tablas.entregas = Array.from({ length: 40 }, (_, i) => ({ tarea_id: T1, alumno_i
 await entrega(peticion({ token: null, body: { accion: 'preparar', t: TOKEN, alumno_id: A1, archivos: [{ nombre: 'a.jpg', mime: 'image/jpeg', bytes: 10 }] } }), res);
 ok(res.statusCode === 200, 'lo descartado o aprobado no gasta el cupo del alumno');
 reiniciar(); res = respuesta();
-tablas.entregas = Array.from({ length: 60 }, () => ({ tarea_id: T1, alumno_id: A2, estado: 'subiendo', created_at: new Date().toISOString() }));
+tablas.entregas = Array.from({ length: 120 }, (_, i) => ({ tarea_id: T1, alumno_id: 'otro-' + i, estado: 'subiendo', created_at: new Date().toISOString() }));
 await entrega(peticion({ token: null, body: { accion: 'preparar', t: TOKEN, alumno_id: A1, archivos: [{ nombre: 'a.jpg', mime: 'image/jpeg', bytes: 10 }] } }), res);
 ok(res.statusCode === 429, 'demasiadas subidas a medias en la tarea → 429 (no se puede llenar el almacén a ciegas)');
+reiniciar(); res = respuesta();
+tablas.entregas = Array.from({ length: 10 }, () => ({ tarea_id: T1, alumno_id: A2, estado: 'subiendo', created_at: new Date().toISOString() }));
+await entrega(peticion({ token: null, body: { accion: 'preparar', t: TOKEN, alumno_id: A2, archivos: [{ nombre: 'a.jpg', mime: 'image/jpeg', bytes: 10 }] } }), res);
+const bloqueadoA2 = res.statusCode; res = respuesta();
+await entrega(peticion({ token: null, body: { accion: 'preparar', t: TOKEN, alumno_id: A1, archivos: [{ nombre: 'a.jpg', mime: 'image/jpeg', bytes: 10 }] } }), res);
+ok(bloqueadoA2 === 429 && res.statusCode === 200, 'quien deja 10 subidas a medias se bloquea a sí mismo, no a la clase');
 
 console.log('== /api/corregir-entregas ==');
 const { default: corregirEntregas } = await import('../api/corregir-entregas.js');
@@ -388,6 +394,7 @@ await correo(avisoFirmado(correoDe('Ana López <ana.lopez@alumnos.es>', 'Libreta
 ok(res.statusCode === 200 && res.cuerpo.recibidos === 2 && res.cuerpo.identificado === true, 'guarda la foto y el PDF (no el logo ni el .exe) y reconoce a Ana por su correo');
 ok(tablas.entregas.every((e) => e.alumno_id === A1 && e.tarea_id === T1 && e.estado === 'pendiente' && e.canal === 'correo' && e.correo_id === 'em-1'), 'entregas pendientes de Ana en «Libreta semana 12»');
 ok(tablas.entregas.every((e) => almacen.has(e.ruta) && e.ruta.startsWith(`${U1}/${T1}/`)), 'archivos en la carpeta del profesor');
+ok((tablas.archivos_por_borrar ?? []).length === 0, 'al terminar bien, ningún archivo queda apuntado para borrar');
 res = respuesta();
 await correo(avisoFirmado(correoDe('ana.lopez@alumnos.es', 'Libreta semana 12')), res);
 ok(res.cuerpo.ignorado === 'ya recibido' && tablas.entregas.length === 2, 'si Resend repite el aviso, no se duplica');
