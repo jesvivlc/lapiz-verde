@@ -6,7 +6,7 @@ import {
   ErrorHttp, prepararRespuesta, registrarUso, responderError, sbAdmin, usuarioDeLaPeticion,
 } from '../lib/servidor.js';
 import {
-  CURSOS_VALIDOS, MODELO, cobrarCredito, devolverCredito, leerCorreccion, peticionCorreccion, responderErrorIA,
+  CURSOS_VALIDOS, FALLOS_COBRADOS, MODELO, cobrarCredito, devolverCredito, leerCorreccion, peticionCorreccion, responderErrorIA,
 } from '../lib/correccion.js';
 import { archivosDelAlumno, guardarCorreccion, marcarError, nombreCompleto, trabajoDeArchivos } from '../lib/entregas.js';
 
@@ -54,10 +54,10 @@ export default async function handler(req, res) {
     const response = await client.messages.create(peticionCorreccion({
       nombre_alumno: nombreCompleto(alumno), curso, nombre_tarea: tarea.titulo, rubrica: String(rubrica), trabajo,
     }));
+    await registrarUso(user.id, 'correccion', MODELO, response.usage, true);
+    if (['refusal', 'max_tokens'].includes(response.stop_reason)) creditoConsumido = false;   // la IA trabajó: no se devuelve
     const resultado = leerCorreccion(response);
     await guardarCorreccion(ids, resultado);
-
-    await registrarUso(user.id, 'correccion', MODELO, response.usage, true);
     return res.status(200).json({ ...resultado, creditos_restantes: restantes, entregas: ids });
   } catch (error) {
     if (creditoConsumido) {
@@ -65,7 +65,9 @@ export default async function handler(req, res) {
       await registrarUso(user.id, 'correccion', MODELO, null, false);
     }
     // Solo se marca como error si la IA falló; un error de datos no estropea la entrega
-    if (ids.length && creditoConsumido) await marcarError(ids, error?.message ?? 'Error al corregir');
+    if (ids.length && (creditoConsumido || FALLOS_COBRADOS.includes(error?.codigo))) {
+      await marcarError(ids, error?.message ?? 'Error al corregir');
+    }
     if (responderErrorIA(res, error, 'corregir-entregas')) return;
     return responderError(res, error, 'corregir-entregas');
   }

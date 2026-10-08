@@ -978,7 +978,7 @@
     jsqr:   ['https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js', 'sha384-hStSInNIZ8ljtOVrmrgf7zdHMapaLBWoSnPTtF0nzsybp4+LuhDz6sHuEVpWIX8o'],
     pdfjs:  ['https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', 'sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e'],
   };
-  const PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const PDFJS_WORKER = ['https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js', 'sha384-SnzOobpRMLXZ52iJvZm/C0fYw0OQemTXzTjIsdsfMcrCtCEe9qgzxTd3RSklO5x2'];
 
   /* ── Estado ── */
   let usuario = null;
@@ -1029,6 +1029,7 @@
     setupDropzone('excelZone', 'excelFile', /\.(xlsx|xls|csv)$/i,   onExcelSelected);
     setupDropzone('escaneoZone', 'escaneoFile', /\.(pdf|jpe?g|png|webp|heic)$/i, onEscaneoSelected, true);
     document.getElementById('formLogin').addEventListener('submit', enviarEnlace);
+    document.getElementById('sinIdentificar').addEventListener('click', onClickSinIdentificar);
 
     sbClient.auth.onAuthStateChange((evento, session) => {
       if (session?.user && usuario?.id !== session.user.id) entrar(session.user);
@@ -1941,13 +1942,23 @@
     const opciones = '<option value="">¿De quién es?</option>' +
       alumnosGrupoSel.map(a => `<option value="${esc(a.id)}">${esc(a.nombre)}</option>`).join('');
     document.getElementById('sinIdentificar').innerHTML = sinId.map(e => `
-      <div class="sin-identificar-item">
+      <div class="sin-identificar-item" data-id="${esc(e.id)}" data-ruta="${esc(e.ruta || '')}">
         <span class="que">${e.canal === 'correo' ? '📧' : '🔗'} ${esc(e.remitente || 'Sin remitente')} · ${esc(e.nombre_fichero || 'archivo')}</span>
         <select id="asignar-${esc(e.id)}">${opciones}</select>
-        <button class="btn btn-secondary btn-sm" onclick="asignarEntrega('${esc(e.id)}')">Asignar</button>
-        <button class="btn btn-secondary btn-sm" onclick="verArchivos(['${esc(e.ruta)}'], 'Archivo recibido')">👁</button>
-        <button class="btn btn-secondary btn-sm" onclick="descartarEntrega('${esc(e.id)}')" title="No es de esta tarea">Descartar</button>
+        <button class="btn btn-secondary btn-sm" data-accion="asignar">Asignar</button>
+        <button class="btn btn-secondary btn-sm" data-accion="ver" title="Ver el archivo">👁</button>
+        <button class="btn btn-secondary btn-sm" data-accion="descartar" title="No es de esta tarea">Descartar</button>
       </div>`).join('');
+  }
+
+  /* Botones de «sin identificar»: un solo manejador, sin código dentro del HTML */
+  function onClickSinIdentificar(ev) {
+    const boton = ev.target.closest('button[data-accion]');
+    if (!boton) return;
+    const { id, ruta } = boton.closest('.sin-identificar-item').dataset;
+    if (boton.dataset.accion === 'asignar') asignarEntrega(id);
+    if (boton.dataset.accion === 'ver') verArchivos([ruta], 'Archivo recibido');
+    if (boton.dataset.accion === 'descartar') descartarEntrega(id);
   }
 
   async function asignarEntrega(id) {
@@ -2158,12 +2169,13 @@
   async function leerPaginasEscaneo(files, avisar) {
     const hayPdf = files.some(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
     await Promise.all([cargarLibreria('jsqr'), hayPdf ? cargarLibreria('pdfjs') : null]);
-    if (hayPdf) pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+    if (hayPdf) await prepararWorkerPdf();
     const ordenados = [...files].sort((a, b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
     const paginas = [];
     for (const f of ordenados) {
       if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf') {
-        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise;
+        // isEvalSupported: false → un PDF manipulado no puede ejecutar código (CVE-2024-4367)
+        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await f.arrayBuffer()), isEvalSupported: false }).promise;
         for (let n = 1; n <= pdf.numPages; n++) {
           const pagina = await pdf.getPage(n);
           const base = pagina.getViewport({ scale: 1 });
@@ -2189,6 +2201,18 @@
       }
     }
     return paginas;
+  }
+
+  /* El worker de pdf.js no admite el atributo integrity: se descarga, se comprueba su huella y se usa desde memoria */
+  async function prepararWorkerPdf() {
+    if (pdfjsLib.GlobalWorkerOptions.workerSrc?.startsWith('blob:')) return;
+    const [src, integridad] = PDFJS_WORKER;
+    const datos = await (await fetch(src)).arrayBuffer();
+    const huella = new Uint8Array(await crypto.subtle.digest('SHA-384', datos));
+    if ('sha384-' + btoa(String.fromCharCode(...huella)) !== integridad) {
+      throw new Error('La librería de PDF descargada no es la esperada. Recarga la página.');
+    }
+    pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([datos], { type: 'text/javascript' }));
   }
 
   /* Cada pegatina abre las páginas de un alumno; las siguientes sin pegatina son suyas */
@@ -2347,6 +2371,7 @@
       <ul style="font-size:13px;color:var(--text-muted);padding-left:18px;display:flex;flex-direction:column;gap:6px;">
         <li>Si el correo del alumno está en tu lista, se reconoce solo. Si no, te aparece como «sin identificar» para que elijas de quién es.</li>
         <li>Que pongan el nombre de la tarea en el asunto. Si no lo ponen, va a la última tarea con la entrega abierta.</li>
+        <li>Solo se aceptan trabajos de tareas con la entrega abierta (en «🔗 Enlace para los alumnos»).</li>
       </ul>
       <div class="modal-actions"><button class="btn btn-secondary btn-sm" onclick="cerrarModal()">Cerrar</button></div>`);
   }

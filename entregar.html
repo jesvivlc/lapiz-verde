@@ -107,11 +107,11 @@
     } catch (_) { return null; }
   }
 
-  async function api(metodo, cuerpo) {
-    const resp = await fetch('/api/entrega' + (metodo === 'GET' ? '?t=' + encodeURIComponent(token) : ''), {
-      method: metodo,
-      headers: cuerpo ? { 'Content-Type': 'application/json' } : {},
-      body: cuerpo ? JSON.stringify({ t: token, ...cuerpo }) : undefined,
+  async function api(cuerpo) {
+    const resp = await fetch('/api/entrega', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ t: token, ...cuerpo }),
     });
     let json = {};
     try { json = await resp.json(); } catch (_) {}
@@ -121,7 +121,7 @@
 
   async function iniciar() {
     try {
-      const info = await api('GET');
+      const info = await api({ accion: 'info' });
       $('titulo').textContent = info.tarea.titulo;
       $('grupo').textContent = info.grupo.nombre ? `Entrega para ${info.grupo.nombre}` : '';
       $('alumno').insertAdjacentHTML('beforeend',
@@ -211,7 +211,7 @@
       const grandes = archivos.find((f) => f.size > MAX_BYTES);
       if (grandes) throw new Error(`«${grandes.name}» ocupa más de 15 MB.`);
 
-      const { subidas } = await api('POST', {
+      const { subidas } = await api({
         accion: 'preparar',
         alumno_id: alumnoId,
         archivos: archivos.map((f) => ({ nombre: f.name, mime: f.type, bytes: f.size })),
@@ -221,7 +221,7 @@
         await subir(subidas[i].url, archivos[i]);
         barra(0.1 + 0.85 * (i + 1) / subidas.length);
       }
-      const { recibidas } = await api('POST', { accion: 'confirmar', ids: subidas.map((s) => s.id) });
+      const { recibidas } = await api({ accion: 'confirmar', ids: subidas.map((s) => s.id) });
       if (recibidas < subidas.length) throw new Error('Algún archivo no ha llegado. Vuelve a intentarlo.');
       barra(1);
       guardado('lv-alumno-' + token, alumnoId);

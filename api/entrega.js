@@ -1,6 +1,7 @@
 // Enlace de entrega: el alumno abre /entregar.html?t=<token>, elige su nombre y sube su trabajo.
 // Sin cuenta: lo único que le da acceso es el token secreto de la tarea.
-//   GET  ?t=…                                  → tarea, grupo y lista de alumnos (nombre + inicial)
+// El token va siempre en el cuerpo (POST), no en la URL, para que no quede en los registros.
+//   POST { accion: 'info', t }                 → tarea, grupo y lista de alumnos (nombre + inicial)
 //   POST { accion: 'preparar', t, alumno_id, archivos: [{ nombre, mime, bytes }] } → URLs firmadas de subida
 //   POST { accion: 'confirmar', t, ids }       → marca como recibidas las que ya están en el almacén
 import crypto from 'node:crypto';
@@ -12,6 +13,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_BYTES = 15 * 1024 * 1024;
 const MAX_POR_ALUMNO = 30;          // archivos por alumno y tarea, en total
 const MAX_POR_HORA_TAREA = 300;     // archivos por tarea en la última hora
+const MAX_SUBIENDO_TAREA = 60;      // subidas empezadas y sin confirmar a la vez, por tarea
+const CUENTAN_CUPO = ['pendiente', 'corrigiendo', 'corregida', 'error'];   // lo abandonado o descartado no gasta cupo
 const EXTENSION = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
 
 async function tareaDelToken(t) {
@@ -33,8 +36,8 @@ export function etiquetasAlumnos(alumnos) {
   return alumnos.map((a) => ({ id: a.id, etiqueta: veces[corta(a)] > 1 ? larga(a) : corta(a) }));
 }
 
-async function info(req, res) {
-  const tarea = await tareaDelToken(req.query?.t);
+async function info(body, res) {
+  const tarea = await tareaDelToken(body.t);
   const [{ data: grupo }, { data: alumnos, error }] = await Promise.all([
     sbAdmin().from('grupos').select('nombre').eq('id', tarea.grupo_id).maybeSingle(),
     sbAdmin().from('alumnos').select('id,nombre,apellidos')
@@ -68,16 +71,18 @@ async function preparar(body, res) {
   if (!alumno) throw new ErrorHttp(400, 'Elige tu nombre de la lista.');
 
   const haceUnaHora = new Date(Date.now() - 3600_000).toISOString();
-  const [{ count: delAlumno }, { count: ultimaHora }] = await Promise.all([
+  const [{ count: delAlumno }, { count: ultimaHora }, { count: subiendo }] = await Promise.all([
     sbAdmin().from('entregas').select('id', { count: 'exact', head: true })
-      .eq('tarea_id', tarea.id).eq('alumno_id', alumno.id),
+      .eq('tarea_id', tarea.id).eq('alumno_id', alumno.id).in('estado', CUENTAN_CUPO),
     sbAdmin().from('entregas').select('id', { count: 'exact', head: true })
       .eq('tarea_id', tarea.id).gte('created_at', haceUnaHora),
+    sbAdmin().from('entregas').select('id', { count: 'exact', head: true })
+      .eq('tarea_id', tarea.id).eq('estado', 'subiendo').gte('created_at', haceUnaHora),
   ]);
   if ((delAlumno ?? 0) + archivos.length > MAX_POR_ALUMNO) {
     throw new ErrorHttp(429, 'Ya has entregado muchos archivos en esta tarea. Habla con tu profe.');
   }
-  if ((ultimaHora ?? 0) + archivos.length > MAX_POR_HORA_TAREA) {
+  if ((ultimaHora ?? 0) + archivos.length > MAX_POR_HORA_TAREA || (subiendo ?? 0) + archivos.length > MAX_SUBIENDO_TAREA) {
     throw new ErrorHttp(429, 'Hay muchas entregas ahora mismo. Prueba dentro de un rato.');
   }
 
@@ -117,27 +122,36 @@ async function confirmar(body, res) {
     .select('id,ruta').eq('tarea_id', tarea.id).eq('estado', 'subiendo').in('id', ids);
   if (error) throw error;
 
-  // Solo se da por recibido lo que de verdad está en el almacén
+  // Solo se da por recibido lo que de verdad está en el almacén, con el tipo declarado y sin pasarse
+  // de tamaño (el navegador podría mentir al pedir la subida)
   const carpeta = `${tarea.owner_id}/${tarea.id}`;
   const recibidas = [];
+  const rechazadas = [];
   for (const f of filas || []) {
     const nombre = f.ruta.split('/').pop();
     const { data: lista, error: errLista } = await sbAdmin().storage.from('entregas').list(carpeta, { search: nombre, limit: 1 });
     if (errLista) throw errLista;
-    if (lista?.some((o) => o.name === nombre)) recibidas.push(f.id);
-  }
-  if (recibidas.length) {
-    const { error: errUpd } = await sbAdmin().from('entregas').update({ estado: 'pendiente' }).in('id', recibidas);
+    const objeto = lista?.find((o) => o.name === nombre);
+    if (!objeto) continue;
+    const tamano = Number(objeto.metadata?.size);
+    if (!(tamano > 0) || tamano > MAX_BYTES || objeto.metadata?.mimetype !== f.mime) { rechazadas.push(f); continue; }
+    const { error: errUpd } = await sbAdmin().from('entregas').update({ estado: 'pendiente', bytes: tamano }).eq('id', f.id);
     if (errUpd) throw errUpd;
+    recibidas.push(f.id);
+  }
+  if (rechazadas.length) {
+    await sbAdmin().storage.from('entregas').remove(rechazadas.map((f) => f.ruta));
+    const { error: errDel } = await sbAdmin().from('entregas').delete().in('id', rechazadas.map((f) => f.id));
+    if (errDel) throw errDel;
   }
   return res.status(200).json({ recibidas: recibidas.length, total: ids.length });
 }
 
 export default async function handler(req, res) {
-  if (prepararRespuesta(req, res, 'GET, POST')) return;
+  if (prepararRespuesta(req, res)) return;
   try {
-    if (req.method === 'GET') return await info(req, res);
     const body = req.body ?? {};
+    if (body.accion === 'info') return await info(body, res);
     if (body.accion === 'preparar') return await preparar(body, res);
     if (body.accion === 'confirmar') return await confirmar(body, res);
     throw new ErrorHttp(400, 'Acción no válida.');

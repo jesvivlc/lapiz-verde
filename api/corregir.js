@@ -69,9 +69,9 @@ export default async function handler(req, res) {
 
     const response = await client.messages.create(
       peticionCorreccion({ nombre_alumno, curso, nombre_tarea, rubrica, trabajo }));
-    const resultado = leerCorreccion(response);
-
     await registrarUso(user.id, 'correccion', MODELO, response.usage, true);
+    if (['refusal', 'max_tokens'].includes(response.stop_reason)) creditoConsumido = false;   // la IA trabajó: no se devuelve
+    const resultado = leerCorreccion(response);
     return res.status(200).json({ ...resultado, creditos_restantes: restantes });
   } catch (error) {
     if (creditoConsumido) {

@@ -37,12 +37,14 @@ export function direccion(texto) {
 
 const norm = (s) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
 
-/** La tarea cuyo título aparece en el asunto (la de título más largo); si no, la última con la entrega abierta, o la última */
+/** La tarea cuyo título aparece en el asunto (la de título más largo); si no, la última con la entrega abierta.
+    Si la entrega de esa tarea está cerrada, no se acepta: cerrar la entrega cierra también el buzón. */
 export function elegirTarea(tareas, asunto) {
   const a = norm(asunto);
   const enAsunto = tareas.filter((t) => t.titulo && a.includes(norm(t.titulo)))
     .sort((x, y) => y.titulo.length - x.titulo.length);
-  return enAsunto[0] ?? tareas.find((t) => t.entrega_abierta) ?? tareas[0] ?? null;
+  const tarea = enAsunto[0] ?? tareas.find((t) => t.entrega_abierta) ?? null;
+  return tarea?.entrega_abierta ? tarea : null;
 }
 
 async function resend(ruta) {
@@ -62,6 +64,7 @@ export default async function handler(req, res) {
   }
 
   // A partir de aquí se responde 200 aunque se ignore el correo: si no, Resend lo reintenta
+  let correoApuntado = null;
   try {
     const evento = JSON.parse(cuerpo);
     if (evento.type !== 'email.received') return res.status(200).json({ ignorado: 'otro evento' });
@@ -74,8 +77,6 @@ export default async function handler(req, res) {
     if (errGrupo) throw errGrupo;
     if (!grupo) return res.status(200).json({ ignorado: 'buzón desconocido' });
 
-    const { count: repetido } = await sbAdmin().from('entregas').select('id', { count: 'exact', head: true }).eq('correo_id', correoId);
-    if (repetido) return res.status(200).json({ ignorado: 'ya recibido' });
 
     const haceUnaHora = new Date(Date.now() - 3600_000).toISOString();
     const { count: ultimaHora } = await sbAdmin().from('entregas').select('id', { count: 'exact', head: true })
@@ -86,7 +87,7 @@ export default async function handler(req, res) {
       .select('id,titulo,entrega_abierta,created_at').eq('grupo_id', grupo.id).order('created_at', { ascending: false });
     if (errTareas) throw errTareas;
     const tarea = elegirTarea(tareas || [], subject);
-    if (!tarea) return res.status(200).json({ ignorado: 'el grupo no tiene tareas' });
+    if (!tarea) return res.status(200).json({ ignorado: 'ninguna tarea con la entrega abierta' });
 
     const remitente = direccion(from);
     const { data: alumnos } = await sbAdmin().from('alumnos').select('id,email').eq('grupo_id', grupo.id).eq('activo', true);
@@ -98,6 +99,14 @@ export default async function handler(req, res) {
       .filter((a) => !(a.content_disposition === 'inline' && a.size < 20_000))   // logos y firmas del correo
       .slice(0, MAX_ARCHIVOS);
     if (!validos.length) return res.status(200).json({ ignorado: 'sin adjuntos válidos' });
+
+    // Se apunta antes de guardar nada: si el aviso llega dos veces a la vez, solo uno pasa
+    const { error: errDup } = await sbAdmin().from('correos_procesados').insert({ correo_id: correoId });
+    if (errDup) {
+      if (errDup.code === '23505') return res.status(200).json({ ignorado: 'ya recibido' });
+      throw errDup;
+    }
+    correoApuntado = correoId;
 
     let recibidos = 0;
     for (const a of validos) {
@@ -121,6 +130,11 @@ export default async function handler(req, res) {
   } catch (error) {
     // Error nuestro (base de datos, almacén): 500 para que Resend lo reintente más tarde
     console.error('[correo-entrante] Error:', error?.message ?? error);
+    if (correoApuntado) {
+      // Se quita la marca para que el reintento lo procese; lo ya guardado de este correo se deshace
+      await sbAdmin().from('entregas').delete().eq('correo_id', correoApuntado);
+      await sbAdmin().from('correos_procesados').delete().eq('correo_id', correoApuntado);
+    }
     return res.status(500).json({ error: 'Error interno' });
   }
 }

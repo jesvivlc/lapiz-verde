@@ -101,6 +101,47 @@ grant select, delete on public.entregas to authenticated;
 grant update (alumno_id, estado) on public.entregas to authenticated;
 
 
+-- ── Correos ya procesados: el aviso de Resend puede llegar dos veces ─
+create table if not exists public.correos_procesados (
+  correo_id   text primary key,
+  created_at  timestamptz not null default now()
+);
+alter table public.correos_procesados enable row level security;
+revoke all on public.correos_procesados from anon, authenticated;
+
+
+-- ── Archivos por borrar ─────────────────────────────────────────────
+-- Si desaparece una entrega (la borra el profesor, se borra la tarea o
+-- la cuenta), su archivo se apunta aquí y el cron nocturno lo elimina.
+-- Así no quedan trabajos de alumnos huérfanos en el almacén.
+create table if not exists public.archivos_por_borrar (
+  ruta        text primary key,
+  created_at  timestamptz not null default now()
+);
+alter table public.archivos_por_borrar enable row level security;
+revoke all on public.archivos_por_borrar from anon, authenticated;
+
+create or replace function public.apuntar_archivo_por_borrar()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if old.ruta is not null then
+    insert into public.archivos_por_borrar (ruta) values (old.ruta) on conflict do nothing;
+  end if;
+  return old;
+end;
+$$;
+revoke execute on function public.apuntar_archivo_por_borrar() from public, anon, authenticated;
+
+drop trigger if exists entregas_apuntar_archivo on public.entregas;
+create trigger entregas_apuntar_archivo
+  after delete on public.entregas
+  for each row execute function public.apuntar_archivo_por_borrar();
+
+
 -- ── Almacén de archivos (Supabase Storage), privado ────────────────
 -- Ruta de cada archivo: <owner_id>/<tarea_id>/<entrega_id>.<ext>
 -- Suben los alumnos con una URL firmada que da el servidor; nadie sube

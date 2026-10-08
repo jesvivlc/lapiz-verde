@@ -49,11 +49,11 @@ async function prepararRuta(route) {
     if (url.pathname === '/' || url.pathname === '/index.html') return route.fulfill({ contentType: 'text/html', body: fs.readFileSync(REPO + 'index.html') });
     if (url.pathname === '/entregar.html') return route.fulfill({ contentType: 'text/html', body: fs.readFileSync(REPO + 'entregar.html') });
     if (url.pathname === '/api/entrega') {
-      if (req.method() === 'GET') {
-        if (url.searchParams.get('t') !== 'T'.repeat(32)) return json({ error: 'Este enlace no es válido.' }, 404);
+      const b = req.postDataJSON(); llamadasEntregas.push(b);
+      if (b.t !== 'T'.repeat(32)) return json({ error: 'Este enlace no es válido.' }, 404);
+      if (b.accion === 'info') {
         return json({ tarea: { titulo: 'Libreta semana 12' }, grupo: { nombre: '3.º ESO A' }, alumnos: [{ id: 'a-1', etiqueta: 'Ana L.' }, { id: 'a-2', etiqueta: 'Luis P.' }] });
       }
-      const b = req.postDataJSON(); llamadasEntregas.push(b);
       if (b.accion === 'preparar') return json({ subidas: b.archivos.map((_, i) => ({ id: 'n-' + i, url: `https://fyoyyvzyoohsczceeyde.supabase.co/storage/v1/object/upload/sign/entregas/u-1/t/n-${i}.jpg?token=x` })) });
       return json({ recibidas: b.ids.length, total: b.ids.length });
     }
@@ -127,7 +127,7 @@ async function prepararPagina(browser, { conSesion }) {
       }));
     }, USER);
   }
-  await page.goto('http://app.test/');
+  await page.goto('https://app.test/');
   return { page, ctx, errores };
 }
 
@@ -285,7 +285,7 @@ console.log('== Entregas recibidas: bandeja, enlace, corregir, asignar ==');
   const enlace = await page.inputValue('#enlaceInput');
   const pt = patches.find(p => p.tabla === 'tareas' && p.b.token_entrega);
   ok(pt && /^[A-Za-z0-9_-]{32}$/.test(pt.b.token_entrega) && pt.b.entrega_abierta === true, 'crea un token aleatorio de 32 caracteres y abre la entrega');
-  ok(enlace === `http://app.test/entregar.html?t=${pt?.b.token_entrega}`, 'el enlace apunta a entregar.html con el token');
+  ok(enlace === `https://app.test/entregar.html?t=${pt?.b.token_entrega}`, 'el enlace apunta a entregar.html con el token');
   await page.waitForSelector('#qrEnlace svg', { timeout: 15000 });
   ok(true, 'muestra el QR del enlace para proyectarlo');
   await page.screenshot({ path: OUT + '7-enlace.png' });
@@ -393,7 +393,7 @@ console.log('== Página del alumno (entregar.html) ==');
   const errores = [];
   page.on('pageerror', e => errores.push(e.message));
   await ctx.route('**/*', (route) => prepararRuta(route));
-  await page.goto('http://app.test/entregar.html?t=' + 'T'.repeat(32));
+  await page.goto('https://app.test/entregar.html?t=' + 'T'.repeat(32));
   await page.waitForSelector('#formulario:not(.hidden)');
   ok((await page.textContent('#titulo')) === 'Libreta semana 12', 'muestra la tarea');
   ok((await page.$$eval('#alumno option', o => o.length)) === 3, 'lista los alumnos para elegir');
@@ -409,9 +409,10 @@ console.log('== Página del alumno (entregar.html) ==');
   ok(prep.alumno_id === 'a-1' && prep.archivos.length === 2 && prep.archivos.every(a => a.mime === 'image/jpeg' && a.bytes < 600000), 'las fotos se reducen a JPEG antes de subir');
   ok(subidas.length === 2 && subidas.every(s => s.metodo === 'PUT' && s.tipo.includes('multipart/form-data')), 'sube cada foto a su URL firmada');
   ok(llamadasEntregas.some(l => l.accion === 'confirmar' && l.ids.length === 2), 'confirma la entrega al terminar');
+  ok(!subidas.some(s => s.url.includes('T'.repeat(32))) && llamadasEntregas.every(l => l.t), 'el token viaja en el cuerpo, nunca en la URL');
   ok((await page.textContent('#hechoTexto')).includes('2 archivos'), 'pantalla de «¡Entregado!»');
   await page.screenshot({ path: OUT + '13-alumno-hecho.png', fullPage: true });
-  await page.goto('http://app.test/entregar.html?t=malo');
+  await page.goto('https://app.test/entregar.html?t=malo');
   await page.waitForSelector('#fallo:not(.hidden)');
   ok((await page.textContent('#falloTexto')).includes('no es válido'), 'enlace malo → mensaje claro');
   ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));

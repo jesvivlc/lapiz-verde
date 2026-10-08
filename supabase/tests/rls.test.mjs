@@ -156,7 +156,16 @@ await expectErr(q(`select * from entregas`), 'anónimo no puede leer entregas');
 await db.exec(`reset role;`);
 await asUser(A, async () => {
   ok((await q(`delete from entregas where id = $1 returning id`, [E])).rows.length === 1, 'Bruno puede borrar su entrega');
+  await expectErr(q(`select * from archivos_por_borrar`), 'no ve la cola de archivos por borrar');
+  await expectErr(q(`insert into correos_procesados values ('x')`), 'no toca los correos procesados');
 });
+ok((await q(`select count(*)::int c from archivos_por_borrar where ruta = 'x'`)).rows[0].c === 1, 'al borrar la entrega, su archivo queda apuntado para borrarlo');
+await db.exec(`set role service_role;`);
+await q(`insert into entregas (owner_id, tarea_id, canal, ruta, estado) values ($1, '33333333-3333-3333-3333-333333333333', 'enlace', 'y', 'pendiente')`, [A]);
+await db.exec(`reset role;`);
+await q(`delete from notas where tarea_id = '33333333-3333-3333-3333-333333333333'`);
+await q(`delete from tareas where id = '33333333-3333-3333-3333-333333333333'`);
+ok((await q(`select count(*)::int c from archivos_por_borrar where ruta = 'y'`)).rows[0].c === 1, 'si se borra la tarea entera, sus archivos también quedan apuntados');
 
 console.log(fails ? `\n${fails} FALLOS` : '\nTodo correcto');
 process.exit(fails ? 1 : 0);

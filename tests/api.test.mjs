@@ -37,7 +37,7 @@ const respuestaIA = { nota: 7.5, nota_texto: 'Notable', comentario: 'Bien', prop
 
 function filtrar(filas, params) {
   for (const [k, v] of params) {
-    if (['select', 'order', 'limit', 'offset', 'columns', 'on_conflict'].includes(k)) continue;
+    if (['select', 'order', 'limit', 'offset', 'columns', 'on_conflict', 'or'].includes(k)) continue;
     const [op, ...resto] = v.split('.');
     const val = resto.join('.');
     filas = filas.filter((f) => {
@@ -85,6 +85,9 @@ globalThis.fetch = async (url, init = {}) => {
       const porDefecto = { lotes_ia: { estado: 'enviado' } }[tabla] ?? {};
       const nuevas = (Array.isArray(body) ? body : [body])
         .map((f) => ({ id: globalThis.crypto.randomUUID(), created_at: new Date().toISOString(), ...porDefecto, ...f }));
+      if (tabla === 'correos_procesados' && nuevas.some((n) => tablas[tabla].some((f) => f.correo_id === n.correo_id))) {
+        return json({ code: '23505', message: 'duplicate key value violates unique constraint' }, 409);
+      }
       tablas[tabla].push(...nuevas);
       return json(unaFila ? nuevas[0] : nuevas, 201);
     }
@@ -100,7 +103,9 @@ globalThis.fetch = async (url, init = {}) => {
   }
   if (u.pathname === '/storage/v1/object/list/entregas') {
     const nombres = [...almacen.keys()].filter((k) => k.startsWith(body.prefix + '/')).map((k) => k.slice(body.prefix.length + 1));
-    return json(nombres.filter((n) => !body.search || n.includes(body.search)).map((name) => ({ name })));
+    const tipo = (n) => (n.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+    return json(nombres.filter((n) => !body.search || n.includes(body.search))
+      .map((name) => ({ name, metadata: { size: almacen.get(`${body.prefix}/${name}`).length, mimetype: tipo(name) } })));
   }
   if (u.pathname.startsWith('/storage/v1/object/entregas/') && metodo === 'POST') {
     almacen.set(decodeURIComponent(u.pathname.slice('/storage/v1/object/entregas/'.length)), init.body);
@@ -134,7 +139,7 @@ globalThis.fetch = async (url, init = {}) => {
   if (url.includes('api.anthropic.com')) {
     estado.anthropicBody = body;
     if (estado.anthropicStatus !== 200) return json({ type: 'error', error: { type: 'invalid_request_error', message: 'mal' } }, estado.anthropicStatus);
-    return json({ id: 'msg_1', type: 'message', role: 'assistant', model: body.model, stop_reason: 'end_turn',
+    return json({ id: 'msg_1', type: 'message', role: 'assistant', model: body.model, stop_reason: estado.stopReason ?? 'end_turn',
       content: [{ type: 'thinking', thinking: '', signature: 'x' }, { type: 'text', text: JSON.stringify(respuestaIA) }],
       usage: { input_tokens: 3000, output_tokens: 500, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } });
   }
@@ -200,6 +205,9 @@ ok(res.statusCode === 400 && estado.creditos === 5 && !estado.anthropicBody, 'r�
 reiniciar(); estado.anthropicStatus = 400; res = respuesta();
 await corregir(peticion({ body: { ...base, texto_tarea: 'x' } }), res);
 ok(res.statusCode === 400 && estado.creditos === 5, 'si la IA falla, devuelve el crédito');
+reiniciar(); estado.stopReason = 'refusal'; res = respuesta();
+await corregir(peticion({ body: { ...base, texto_tarea: 'x' } }), res);
+ok(res.statusCode === 422 && estado.creditos === 4 && tablas.uso_ia.some((u) => u.input_tokens === 3000), 'si la IA trabajó pero se negó: no se devuelve (ya está pagada) y se registra el uso');
 
 console.log('== /api/stripe-webhook ==');
 process.env.STRIPE_SECRET_KEY = 'sk_test_x';
@@ -260,16 +268,16 @@ ok(res.statusCode === 400 && estado.creditos === 5, 'más de 10 páginas → 400
 console.log('== /api/entrega (enlace para alumnos, sin cuenta) ==');
 const { default: entrega, etiquetasAlumnos } = await import('../api/entrega.js');
 reiniciar(); res = respuesta();
-await entrega(peticion({ metodo: 'GET', token: null, query: { t: TOKEN } }), res);
+await entrega(peticion({ token: null, body: { accion: 'info', t: TOKEN } }), res);
 ok(res.statusCode === 200 && res.cuerpo.tarea.titulo === 'Libreta semana 12' && res.cuerpo.alumnos.length === 2, 'con el enlace: tarea y alumnos SOLO de ese grupo');
 ok(JSON.stringify(res.cuerpo).indexOf('López García') === -1 && !JSON.stringify(res.cuerpo).includes('email'), 'no expone apellidos completos ni correos');
 ok(etiquetasAlumnos([{ id: 1, nombre: 'Ana', apellidos: 'López' }, { id: 2, nombre: 'Ana', apellidos: 'Lucas' }, { id: 3, nombre: 'Leo', apellidos: 'Gil' }])
   .map((a) => a.etiqueta).join('|') === 'Ana López|Ana Lucas|Leo G.', 'dos «Ana L.» → se distinguen por el primer apellido');
 reiniciar(); res = respuesta();
-await entrega(peticion({ metodo: 'GET', token: null, query: { t: 'tok_' + 'y'.repeat(36) } }), res);
+await entrega(peticion({ token: null, body: { accion: 'info', t: 'tok_' + 'y'.repeat(36) } }), res);
 ok(res.statusCode === 404, 'token que no existe → 404');
 reiniciar(); tablas.tareas[0].entrega_abierta = false; res = respuesta();
-await entrega(peticion({ metodo: 'GET', token: null, query: { t: TOKEN } }), res);
+await entrega(peticion({ token: null, body: { accion: 'info', t: TOKEN } }), res);
 ok(res.statusCode === 410, 'entrega cerrada por el profe → 410');
 
 reiniciar(); res = respuesta();
@@ -281,6 +289,12 @@ almacen.set(tablas.entregas[0].ruta, Buffer.from('foto'));   // solo llega el pr
 res = respuesta();
 await entrega(peticion({ token: null, body: { accion: 'confirmar', t: TOKEN, ids } }), res);
 ok(res.cuerpo.recibidas === 1 && tablas.entregas[0].estado === 'pendiente' && tablas.entregas[1].estado === 'subiendo', 'confirmar solo da por recibido lo que está en el almacén');
+ok(tablas.entregas[0].bytes === 4, 'guarda el tamaño REAL del archivo, no el declarado (300000)');
+almacen.set(tablas.entregas[1].ruta, Buffer.alloc(16 * 1024 * 1024));   // declaró 900 KB y subió 16 MB
+const rutaGrande = tablas.entregas[1].ruta;
+res = respuesta();
+await entrega(peticion({ token: null, body: { accion: 'confirmar', t: TOKEN, ids } }), res);
+ok(res.cuerpo.recibidas === 0 && tablas.entregas.length === 1 && !almacen.has(rutaGrande), 'si lo subido pasa de 15 MB: se rechaza y se borra');
 
 for (const [desc, b, codigo] of [
   ['alumno de otro grupo', { alumno_id: AX, archivos: [{ nombre: 'x.jpg', mime: 'image/jpeg', bytes: 10 }] }, 400],
@@ -296,6 +310,14 @@ reiniciar(); res = respuesta();
 tablas.entregas = Array.from({ length: 29 }, () => ({ tarea_id: T1, alumno_id: A1, estado: 'pendiente', created_at: '2020-01-01' }));
 await entrega(peticion({ token: null, body: { accion: 'preparar', t: TOKEN, alumno_id: A1, archivos: [{ nombre: 'a.jpg', mime: 'image/jpeg', bytes: 10 }, { nombre: 'b.jpg', mime: 'image/jpeg', bytes: 10 }] } }), res);
 ok(res.statusCode === 429, 'más de 30 archivos por alumno en una tarea → 429');
+reiniciar(); res = respuesta();
+tablas.entregas = Array.from({ length: 40 }, (_, i) => ({ tarea_id: T1, alumno_id: A1, estado: i % 2 ? 'descartada' : 'aprobada', created_at: '2020-01-01' }));
+await entrega(peticion({ token: null, body: { accion: 'preparar', t: TOKEN, alumno_id: A1, archivos: [{ nombre: 'a.jpg', mime: 'image/jpeg', bytes: 10 }] } }), res);
+ok(res.statusCode === 200, 'lo descartado o aprobado no gasta el cupo del alumno');
+reiniciar(); res = respuesta();
+tablas.entregas = Array.from({ length: 60 }, () => ({ tarea_id: T1, alumno_id: A2, estado: 'subiendo', created_at: new Date().toISOString() }));
+await entrega(peticion({ token: null, body: { accion: 'preparar', t: TOKEN, alumno_id: A1, archivos: [{ nombre: 'a.jpg', mime: 'image/jpeg', bytes: 10 }] } }), res);
+ok(res.statusCode === 429, 'demasiadas subidas a medias en la tarea → 429 (no se puede llenar el almacén a ciegas)');
 
 console.log('== /api/corregir-entregas ==');
 const { default: corregirEntregas } = await import('../api/corregir-entregas.js');
@@ -357,8 +379,9 @@ function conBuzon() {
   ];
 }
 ok(direccion('Ana López <Ana.Lopez@Alumnos.es>') === 'ana.lopez@alumnos.es', 'saca la dirección del remitente');
-const tareasP = [{ id: 1, titulo: 'Libreta', entrega_abierta: false }, { id: 2, titulo: 'Libreta semana 12', entrega_abierta: false }, { id: 3, titulo: 'Otra', entrega_abierta: true }];
-ok(elegirTarea(tareasP, 'Re: libreta SEMANA 12 de Ana')?.id === 2 && elegirTarea(tareasP, 'mi trabajo')?.id === 3, 'tarea por el asunto (la más específica); si no, la última abierta');
+const tareasP = [{ id: 1, titulo: 'Libreta', entrega_abierta: true }, { id: 2, titulo: 'Libreta semana 12', entrega_abierta: true }, { id: 3, titulo: 'Otra', entrega_abierta: true }, { id: 4, titulo: 'Cerrada', entrega_abierta: false }];
+ok(elegirTarea(tareasP, 'Re: libreta SEMANA 12 de Ana')?.id === 2 && elegirTarea(tareasP, 'mi trabajo')?.id === 1, 'tarea por el asunto (la más específica); si no, la última abierta');
+ok(elegirTarea(tareasP, 'te mando lo de cerrada') === null, 'si la tarea del asunto tiene la entrega cerrada → no se acepta');
 
 conBuzon(); res = respuesta();
 await correo(avisoFirmado(correoDe('Ana López <ana.lopez@alumnos.es>', 'Libreta semana 12')), res);
@@ -370,9 +393,12 @@ await correo(avisoFirmado(correoDe('ana.lopez@alumnos.es', 'Libreta semana 12'))
 ok(res.cuerpo.ignorado === 'ya recibido' && tablas.entregas.length === 2, 'si Resend repite el aviso, no se duplica');
 
 conBuzon(); res = respuesta();
-await correo(avisoFirmado(correoDe('desconocido@gmail.com', 'redacción')), res);
-ok(res.cuerpo.recibidos === 2 && tablas.entregas.every((e) => e.alumno_id === null && e.remitente === 'desconocido@gmail.com' && e.tarea_id === '20000000-0000-4000-8000-000000000002'),
-  'remitente desconocido → «sin identificar», en la tarea del asunto aunque esté cerrada');
+await correo(avisoFirmado(correoDe('desconocido@gmail.com', 'cosas')), res);
+ok(res.cuerpo.recibidos === 2 && tablas.entregas.every((e) => e.alumno_id === null && e.remitente === 'desconocido@gmail.com' && e.tarea_id === T1),
+  'remitente desconocido → «sin identificar», en la última tarea abierta');
+conBuzon(); res = respuesta();
+await correo(avisoFirmado(correoDe('ana.lopez@alumnos.es', 'Redacción')), res);
+ok(res.cuerpo.ignorado && tablas.entregas.length === 0, 'tarea del asunto con la entrega cerrada → no se guarda');
 
 conBuzon(); res = respuesta();
 await correo(avisoFirmado(correoDe('ana.lopez@alumnos.es', 'hola'), { secreto: 'whsec_' + Buffer.from('otro').toString('base64') }), res);
@@ -448,6 +474,11 @@ ok(res.cuerpo.fallidas === 1 && lucasE.every((x) => x.estado === 'error') && est
 ok(tablas.lotes_ia[0].estado === 'recogido' && tablas.uso_ia.some((u) => u.tipo === 'correccion_lote' && u.input_tokens === 2000), 'lote cerrado y coste registrado');
 ok(!almacen.has(`${U1}/${T1}/vieja.jpg`) && tablas.entregas.find((x) => x.id === 'vieja').ruta === null, 'borra el archivo de lo ya aprobado');
 ok(!tablas.entregas.some((x) => x.id === 'abandonada'), 'borra las subidas que nunca se completaron');
+ok(tablas.entregas.find((x) => x.id === 'vieja').resultado == null, 'y la propuesta de la IA de lo ya aprobado');
+reiniciar(); tablas.lotes_ia = []; tablas.archivos_por_borrar = [{ ruta: `${U1}/t/huerfano.jpg` }]; almacen.set(`${U1}/t/huerfano.jpg`, 'x');
+res = respuesta();
+await cron(peticionCron('recoger'), res);
+ok(!almacen.has(`${U1}/t/huerfano.jpg`) && tablas.archivos_por_borrar.length === 0, 'borra los archivos huérfanos (de entregas o tareas borradas)');
 
 console.log(fails ? `\n${fails} FALLOS` : '\nTodo correcto');
 process.exit(fails ? 1 : 0);
