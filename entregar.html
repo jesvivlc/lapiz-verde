@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Entregar tarea — Lápiz Verde</title>
+  <style>
+    :root {
+      --primary: #16A34A; --primary-dark: #15803D; --primary-light: #F0FDF4;
+      --danger: #DC2626; --bg: #F1F5F9; --surface: #FFFFFF; --border: #E2E8F0;
+      --text: #0F172A; --text-muted: #64748B; --radius: 16px;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+    main { max-width: 520px; margin: 0 auto; padding: 24px 16px 48px; }
+    .marca { font-weight: 800; color: var(--primary-dark); font-size: 15px; margin-bottom: 16px; }
+    .card { background: var(--surface); border-radius: var(--radius); padding: 24px 20px; box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.05); }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    .sub { color: var(--text-muted); font-size: 14px; margin: 0 0 20px; }
+    label { display: block; font-weight: 600; font-size: 14px; margin: 18px 0 8px; }
+    select { width: 100%; font-size: 17px; padding: 12px; border: 1.5px solid var(--border); border-radius: 10px; background: white; color: var(--text); }
+    .botones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font: inherit; font-weight: 600; font-size: 16px; padding: 14px 16px; border-radius: 12px; border: none; cursor: pointer; text-align: center; }
+    .btn-sec { background: var(--primary-light); color: var(--primary-dark); border: 1.5px solid #BBF7D0; }
+    .btn-pri { background: var(--primary); color: white; width: 100%; margin-top: 22px; font-size: 17px; }
+    .btn-pri:disabled { opacity: .5; cursor: default; }
+    .btn input { display: none; }
+    .lista { list-style: none; padding: 0; margin: 14px 0 0; display: flex; flex-direction: column; gap: 8px; }
+    .lista li { display: flex; align-items: center; gap: 10px; background: var(--bg); border-radius: 10px; padding: 8px 10px; font-size: 14px; }
+    .lista img, .lista .icono { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: white; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+    .lista .nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .quitar { background: none; border: none; font-size: 20px; color: var(--text-muted); cursor: pointer; padding: 4px 8px; }
+    .aviso { margin-top: 14px; font-size: 13px; color: var(--text-muted); }
+    .error { background: #FEF2F2; color: var(--danger); border-radius: 10px; padding: 12px 14px; font-size: 14px; margin-top: 16px; }
+    .ok { text-align: center; padding: 12px 0; }
+    .ok .grande { font-size: 56px; }
+    .progreso { height: 8px; background: var(--border); border-radius: 99px; overflow: hidden; margin-top: 16px; }
+    .progreso div { height: 100%; width: 0; background: var(--primary); transition: width .3s; }
+    .hidden { display: none !important; }
+    footer { text-align: center; color: var(--text-muted); font-size: 12px; margin-top: 20px; }
+    footer a { color: inherit; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="marca">✏️ Lápiz Verde</div>
+
+  <div class="card" id="cargando"><p class="sub">Cargando…</p></div>
+
+  <div class="card hidden" id="formulario">
+    <h1 id="titulo"></h1>
+    <p class="sub" id="grupo"></p>
+
+    <label for="alumno">¿Quién eres?</label>
+    <select id="alumno"><option value="">— Elige tu nombre —</option></select>
+
+    <label>Tu trabajo</label>
+    <div class="botones">
+      <label class="btn btn-sec" style="margin:0">📷 Hacer foto
+        <input type="file" id="camara" accept="image/*" capture="environment" multiple>
+      </label>
+      <label class="btn btn-sec" style="margin:0">📎 Elegir archivo
+        <input type="file" id="archivos" accept="image/*,application/pdf" multiple>
+      </label>
+    </div>
+    <ul class="lista" id="lista"></ul>
+    <p class="aviso">Si tu trabajo tiene varias páginas, haz una foto de cada una, en orden. Fotos o PDF, hasta 10 de una vez.</p>
+
+    <div class="error hidden" id="error"></div>
+    <div class="progreso hidden" id="progreso"><div id="barra"></div></div>
+    <button class="btn btn-pri" id="enviar" disabled>Entregar</button>
+  </div>
+
+  <div class="card hidden" id="hecho">
+    <div class="ok">
+      <div class="grande">✅</div>
+      <h1>¡Entregado!</h1>
+      <p class="sub" id="hechoTexto"></p>
+      <button class="btn btn-sec" onclick="location.reload()">Entregar algo más</button>
+    </div>
+  </div>
+
+  <div class="card hidden" id="fallo">
+    <h1>No se puede entregar</h1>
+    <p class="sub" id="falloTexto"></p>
+  </div>
+
+  <footer>Tu trabajo solo lo ve tu profe. <a href="./privacidad.html">Privacidad</a></footer>
+</main>
+
+<script>
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ5b3l5dnp5b29oc2N6Y2VleWRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMDM5NjEsImV4cCI6MjA5MzU3OTk2MX0.XA9FV5jEW5L8MGyVcYSsZ7hkynlngDZTcJFjWW48KmE';
+  const MAX_ARCHIVOS = 10;
+  const MAX_LADO = 1568;            // por encima, la IA no gana detalle
+  const MAX_BYTES = 15 * 1024 * 1024;
+  const token = new URLSearchParams(location.search).get('t') || '';
+  let elegidos = [];                 // [{ file, url }]
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  function guardado(clave, valor) {
+    try {
+      if (valor === undefined) return localStorage.getItem(clave);
+      localStorage.setItem(clave, valor);
+    } catch (_) { return null; }
+  }
+
+  async function api(metodo, cuerpo) {
+    const resp = await fetch('/api/entrega' + (metodo === 'GET' ? '?t=' + encodeURIComponent(token) : ''), {
+      method: metodo,
+      headers: cuerpo ? { 'Content-Type': 'application/json' } : {},
+      body: cuerpo ? JSON.stringify({ t: token, ...cuerpo }) : undefined,
+    });
+    let json = {};
+    try { json = await resp.json(); } catch (_) {}
+    if (!resp.ok) throw new Error(json.error || 'No se ha podido conectar. Inténtalo de nuevo.');
+    return json;
+  }
+
+  async function iniciar() {
+    try {
+      const info = await api('GET');
+      $('titulo').textContent = info.tarea.titulo;
+      $('grupo').textContent = info.grupo.nombre ? `Entrega para ${info.grupo.nombre}` : '';
+      $('alumno').insertAdjacentHTML('beforeend',
+        info.alumnos.map((a) => `<option value="${esc(a.id)}">${esc(a.etiqueta)}</option>`).join(''));
+      const anterior = guardado('lv-alumno-' + token);
+      if (anterior && info.alumnos.some((a) => a.id === anterior)) $('alumno').value = anterior;
+      $('cargando').classList.add('hidden');
+      $('formulario').classList.remove('hidden');
+      actualizar();
+    } catch (e) {
+      $('cargando').classList.add('hidden');
+      $('falloTexto').textContent = e.message;
+      $('fallo').classList.remove('hidden');
+    }
+  }
+
+  function anadir(input) {
+    for (const file of input.files) {
+      if (elegidos.length >= MAX_ARCHIVOS) { mostrarError(`Como máximo ${MAX_ARCHIVOS} archivos de una vez.`); break; }
+      if (!/^image\//.test(file.type) && file.type !== 'application/pdf') { mostrarError(`«${file.name}» no es una foto ni un PDF.`); continue; }
+      if (file.type === 'application/pdf' && file.size > MAX_BYTES) { mostrarError(`«${file.name}» ocupa más de 15 MB.`); continue; }
+      elegidos.push({ file, url: /^image\//.test(file.type) ? URL.createObjectURL(file) : null });
+    }
+    input.value = '';
+    actualizar();
+  }
+
+  function quitar(i) {
+    if (elegidos[i].url) URL.revokeObjectURL(elegidos[i].url);
+    elegidos.splice(i, 1);
+    actualizar();
+  }
+
+  function actualizar() {
+    $('lista').innerHTML = elegidos.map((e, i) => `<li>
+      ${e.url ? `<img src="${e.url}" alt="">` : '<span class="icono">📄</span>'}
+      <span class="nombre">${i + 1}. ${esc(e.file.name)}</span>
+      <button class="quitar" onclick="quitar(${i})" aria-label="Quitar">✕</button></li>`).join('');
+    $('enviar').disabled = !elegidos.length || !$('alumno').value;
+    $('enviar').textContent = elegidos.length > 1 ? `Entregar ${elegidos.length} archivos` : 'Entregar';
+  }
+
+  function mostrarError(msg) {
+    $('error').textContent = msg;
+    $('error').classList.toggle('hidden', !msg);
+  }
+
+  /* Fotos del móvil (4000 px, 5 MB) → JPEG de 1568 px: sube rápido incluso con mala cobertura */
+  async function prepararFoto(file) {
+    try {
+      const bmp = await createImageBitmap(file);
+      const escala = Math.min(1, MAX_LADO / Math.max(bmp.width, bmp.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(bmp.width * escala);
+      canvas.height = Math.round(bmp.height * escala);
+      canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', 0.85));
+      if (blob) return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+    } catch (_) { /* formato que el navegador no sabe abrir: se sube tal cual */ }
+    return file;
+  }
+
+  async function subir(url, file) {
+    const form = new FormData();
+    form.append('cacheControl', '3600');
+    form.append('', file);
+    const resp = await fetch(url, {
+      method: 'PUT',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY, 'x-upsert': 'false' },
+      body: form,
+    });
+    if (!resp.ok) throw new Error(`No se pudo subir «${file.name}». Comprueba la conexión e inténtalo de nuevo.`);
+  }
+
+  async function enviar() {
+    const alumnoId = $('alumno').value;
+    if (!alumnoId || !elegidos.length) return;
+    mostrarError('');
+    $('enviar').disabled = true;
+    $('enviar').textContent = 'Preparando…';
+    $('progreso').classList.remove('hidden');
+    const barra = (n) => { $('barra').style.width = Math.round(n * 100) + '%'; };
+    barra(0.05);
+    try {
+      const archivos = [];
+      for (const e of elegidos) archivos.push(/^image\//.test(e.file.type) ? await prepararFoto(e.file) : e.file);
+      const grandes = archivos.find((f) => f.size > MAX_BYTES);
+      if (grandes) throw new Error(`«${grandes.name}» ocupa más de 15 MB.`);
+
+      const { subidas } = await api('POST', {
+        accion: 'preparar',
+        alumno_id: alumnoId,
+        archivos: archivos.map((f) => ({ nombre: f.name, mime: f.type, bytes: f.size })),
+      });
+      $('enviar').textContent = 'Subiendo…';
+      for (let i = 0; i < subidas.length; i++) {
+        await subir(subidas[i].url, archivos[i]);
+        barra(0.1 + 0.85 * (i + 1) / subidas.length);
+      }
+      const { recibidas } = await api('POST', { accion: 'confirmar', ids: subidas.map((s) => s.id) });
+      if (recibidas < subidas.length) throw new Error('Algún archivo no ha llegado. Vuelve a intentarlo.');
+      barra(1);
+      guardado('lv-alumno-' + token, alumnoId);
+      $('hechoTexto').textContent = `${recibidas === 1 ? 'Tu archivo ha llegado' : `Tus ${recibidas} archivos han llegado`} a tu profe.`;
+      $('formulario').classList.add('hidden');
+      $('hecho').classList.remove('hidden');
+    } catch (e) {
+      mostrarError(e.message);
+      $('progreso').classList.add('hidden');
+      actualizar();
+    }
+  }
+
+  $('camara').addEventListener('change', (e) => anadir(e.target));
+  $('archivos').addEventListener('change', (e) => anadir(e.target));
+  $('alumno').addEventListener('change', actualizar);
+  $('enviar').addEventListener('click', enviar);
+  iniciar();
+</script>
+</body>
+</html>

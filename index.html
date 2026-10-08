@@ -602,6 +602,33 @@
     .landing-footer { text-align: center; font-size: 13px; color: var(--text-muted); }
     .landing-footer a { color: var(--text-muted); }
 
+    /* ── Bandeja de entregas (enlace y correo) ── */
+    .bandeja {
+      grid-column: 1 / -1; background: white; border: 1px solid #BBF7D0; border-radius: var(--radius-sm);
+      padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
+    }
+    .bandeja-fila { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+    .bandeja-resumen { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+    .bandeja-acciones { display: flex; gap: 8px; flex-wrap: wrap; }
+    .sin-identificar { display: flex; flex-direction: column; gap: 6px; }
+    .sin-identificar-item {
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px;
+      background: #FFFBEB; border-radius: var(--radius-sm); padding: 8px 10px;
+    }
+    .sin-identificar-item .que { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+    .sin-identificar-item select { flex: 1 1 160px; padding: 6px; }
+    .enlace-caja { display: flex; gap: 8px; }
+    .enlace-caja input { flex: 1; min-width: 0; font-size: 13px; }
+    .qr-enlace { align-self: center; text-align: center; font-size: 12px; color: var(--text-muted); }
+    .qr-enlace svg { width: 180px; height: 180px; display: block; margin: 0 auto 4px; }
+    label.interruptor {
+      display: flex; gap: 10px; align-items: flex-start; font-size: 14px; font-weight: 500;
+      text-transform: none; letter-spacing: 0; color: var(--text); cursor: pointer;
+    }
+    label.interruptor input { margin-top: 4px; }
+    label.interruptor small { display: block; color: var(--text-muted); font-size: 12px; }
+    .enlaces-trabajo { display: flex; gap: 8px; flex-wrap: wrap; }
+
     /* ── Responsive ── */
     @media (max-width: 768px) {
       .form-grid, .config-grid { grid-template-columns: 1fr; }
@@ -780,6 +807,20 @@
           <select id="selTarea" onchange="onTareaChange()" disabled></select>
         </div>
         <div class="destino-hint" id="destinoHint">Elige grupo y tarea para que las notas aprobadas se guarden solas en tu cuaderno. Si no, puedes corregir con un Excel de alumnos.</div>
+        <div class="bandeja hidden" id="bandeja">
+          <div class="bandeja-fila">
+            <div>
+              <strong>📥 Entregas recibidas</strong>
+              <div class="bandeja-resumen" id="bandejaResumen">—</div>
+            </div>
+            <div class="bandeja-acciones">
+              <button class="btn btn-secondary btn-sm" onclick="modalEnlaceEntrega()">🔗 Enlace para los alumnos</button>
+              <button class="btn btn-secondary btn-sm" onclick="cargarBandeja()" title="Actualizar">↻</button>
+              <button class="btn btn-primary btn-sm" id="btnCorregirRecibidas" onclick="corregirRecibidas()" disabled>✏️ Corregir lo recibido</button>
+            </div>
+          </div>
+          <div class="sin-identificar" id="sinIdentificar"></div>
+        </div>
       </div>
 
       <div class="form-group">
@@ -789,6 +830,16 @@
           <span class="dropzone-icon">📦</span>
           <div class="dropzone-label">Arrastra el ZIP aquí o haz clic</div>
           <div class="dropzone-hint">Descargado de Teams o de Aules/Moodle ("Descargar todas las entregas")</div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Escaneo de libretas (con pegatina QR)</label>
+        <div class="dropzone" id="escaneoZone">
+          <input type="file" id="escaneoFile" accept=".pdf,image/*" multiple onchange="onEscaneoSelected(this)">
+          <span class="dropzone-icon">🏷️</span>
+          <div class="dropzone-label">Arrastra el PDF escaneado o las fotos</div>
+          <div class="dropzone-hint">Con la pegatina QR de cada alumno en su primera página. Imprímelas desde el Cuaderno.</div>
         </div>
       </div>
 
@@ -880,6 +931,8 @@
               📥 Importar alumnos (Excel)
               <input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="importarAlumnos(this)">
             </label>
+            <button class="btn btn-secondary btn-sm" onclick="imprimirPegatinas()">🏷️ Pegatinas QR</button>
+            <button class="btn btn-secondary btn-sm" onclick="modalBuzon()">📧 Buzón del grupo</button>
             <button class="btn btn-primary btn-sm" onclick="modalNuevaTarea()">+ Nueva tarea</button>
           </div>
         </div>
@@ -898,9 +951,9 @@
 
 <div id="toast" class="toast"></div>
 
-<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.min.js" integrity="sha384-dl/4LkSyQ4uEucc48NM6VDZLAjLLq9yMzZ5JLXumBq7Ld33XBof73hseOqPhO89+" crossorigin="anonymous"></script>
 <script>
   /* ── Supabase ── */
   const SUPABASE_URL = 'https://fyoyyvzyoohsczceeyde.supabase.co';
@@ -915,6 +968,17 @@
   const CORRECCIONES_EN_PARALELO = 3;
   const MAX_LADO_IMAGEN = 1568;   // por encima, la IA no gana detalle y cuesta más
   const MAX_MB_ARCHIVO = 3.2;     // límite de Vercel: 4,5 MB por petición, ya en base64
+  const MAX_PAGINAS = 10;         // archivos o páginas por alumno en una corrección
+  const PREFIJO_QR = 'LV1:';      // contenido de las pegatinas: LV1:<id del alumno>
+  const DOMINIO_ENTREGAS = 'entregas.lapizverde.com';
+
+  /* Librerías que solo hacen falta a veces: se cargan al usarlas, con versión fija e integridad */
+  const LIBRERIAS = {
+    qrcode: ['https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js', 'sha384-mZT2gIty7ZDdOGkxfP6joZcYdMW1Jvj9dRlfpTmaJAKKXTqzygtB22k7FLe+KZC1'],
+    jsqr:   ['https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js', 'sha384-hStSInNIZ8ljtOVrmrgf7zdHMapaLBWoSnPTtF0nzsybp4+LuhDz6sHuEVpWIX8o'],
+    pdfjs:  ['https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', 'sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e'],
+  };
+  const PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
   /* ── Estado ── */
   let usuario = null;
@@ -929,7 +993,9 @@
   let cellsDirty = new Set();
 
   let alumnosData = [];        // del Excel: [{nombre, email}]
-  let cards = [];              // índice → {alumno, result, estado}
+  let archivosEscaneo = [];    // PDF o fotos con pegatinas QR
+  let entregasTarea = [];      // lo recibido por enlace o correo para la tarea elegida
+  let cards = [];              // índice → {alumno, result, estado, corregir?, entregas?}
   let isProcessing = false;
 
   /* ══════════════════════════════════════
@@ -961,6 +1027,7 @@
     rellenarSelectsCurso();
     setupDropzone('zipZone',   'zipFile',   /\.zip$/i,              onZipSelected);
     setupDropzone('excelZone', 'excelFile', /\.(xlsx|xls|csv)$/i,   onExcelSelected);
+    setupDropzone('escaneoZone', 'escaneoFile', /\.(pdf|jpe?g|png|webp|heic)$/i, onEscaneoSelected, true);
     document.getElementById('formLogin').addEventListener('submit', enviarEnlace);
 
     sbClient.auth.onAuthStateChange((evento, session) => {
@@ -1155,6 +1222,7 @@
     alumnosGrupoSel = [];
     document.getElementById('excelGroup').classList.toggle('hidden', !!grupoId);
 
+    cargarBandeja();
     if (!grupoId) {
       selTarea.innerHTML = '<option value="">—</option>';
       selTarea.disabled = true;
@@ -1166,7 +1234,7 @@
     if (grupo?.nivel && CURSOS.some(([v]) => v === grupo.nivel)) document.getElementById('cursoForm').value = grupo.nivel;
 
     const [{ data: tareas }, { data: alumnos }] = await Promise.all([
-      sbClient.from('tareas').select('id,titulo,rubrica').eq('grupo_id', grupoId).order('created_at', { ascending: false }),
+      sbClient.from('tareas').select('id,titulo,rubrica,token_entrega,entrega_abierta,correccion_auto').eq('grupo_id', grupoId).order('created_at', { ascending: false }),
       sbClient.from('alumnos').select('id,nombre,apellidos,email').eq('grupo_id', grupoId).eq('activo', true).order('apellidos').order('nombre'),
     ]);
     tareasGrupoSel = tareas || [];
@@ -1191,6 +1259,7 @@
       return;
     }
     const tarea = tareasGrupoSel.find(t => t.id === sel.value);
+    cargarBandeja();
     if (!tarea) return;
     document.getElementById('nombreTarea').value = tarea.titulo;
     if (tarea.rubrica) {
@@ -1230,19 +1299,19 @@
   }
 
   /* ── Dropzones ── */
-  function setupDropzone(zoneId, inputId, ext, onFile) {
+  function setupDropzone(zoneId, inputId, ext, onFile, varios = false) {
     const zone = document.getElementById(zoneId);
     zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
     zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
     zone.addEventListener('drop', e => {
       e.preventDefault();
       zone.classList.remove('drag-over');
-      const file = e.dataTransfer.files[0];
-      if (!file) return;
-      if (!ext.test(file.name)) { showToast('Formato de archivo no válido', 'error'); return; }
+      const files = [...e.dataTransfer.files].slice(0, varios ? Infinity : 1);
+      if (!files.length) return;
+      if (files.some(f => !ext.test(f.name))) { showToast('Formato de archivo no válido', 'error'); return; }
       const input = document.getElementById(inputId);
       const dt = new DataTransfer();
-      dt.items.add(file);
+      files.forEach(f => dt.items.add(f));
       input.files = dt.files;
       onFile(input);
     });
@@ -1253,6 +1322,13 @@
     zone.classList.add('file-loaded');
     zone.querySelector('.dropzone-icon').textContent = '✅';
     zone.querySelector('.dropzone-label').textContent = fileName;
+  }
+
+  function onEscaneoSelected(input) {
+    archivosEscaneo = [...input.files];
+    if (archivosEscaneo.length) {
+      markZoneLoaded('escaneoZone', archivosEscaneo.length === 1 ? archivosEscaneo[0].name : `${archivosEscaneo.length} archivos`);
+    }
   }
 
   function onZipSelected(input) {
@@ -1458,6 +1534,7 @@
         </div>
       </div>
       <div class="card-footer">
+        ${cards[i].entregas?.length ? `<button class="btn btn-secondary btn-sm" onclick="verTrabajo(${i})">👁 Ver trabajo</button>` : ''}
         <button class="btn btn-secondary btn-sm" onclick="copiarFeedback(${i})">📋 Copiar</button>
         ${alumno.email && alumno.id ? `<button class="btn btn-secondary btn-sm" id="emailBtn-${i}" onclick="onSendEmail(${i}, this)">📧 Enviar</button>` : ''}
         ${puedeAprobar
@@ -1550,6 +1627,7 @@
     }, { onConflict: 'alumno_id,tarea_id' });
 
     if (error) { showToast(`No se pudo guardar la nota de ${alumno.nombre}: ${error.message}`, 'error'); return false; }
+    if (cards[i].entregas?.length) cerrarEntregas(cards[i].entregas);
     cards[i].estado = 'aprobada';
     const card = document.getElementById('card-' + i);
     card.classList.add('aprobada');
@@ -1603,49 +1681,62 @@
   }
 
   /* ══════════════════════════════════════
-     FUNCIÓN PRINCIPAL
+     MOTOR DE CORRECCIÓN (común a ZIP, escaneo QR y entregas recibidas)
   ══════════════════════════════════════ */
-  async function corregirClase() {
-    if (isProcessing) return;
 
-    const zipFile  = document.getElementById('zipFile').files[0];
-    const grupoId  = document.getElementById('selGrupo').value;
+  function errorTarjeta(titulo, mensaje, codigo) {
+    const e = new Error(mensaje);
+    e.titulo = titulo;
+    e.codigo = codigo;
+    return e;
+  }
+
+  /* Nombre de la tarea, rúbrica y curso del formulario; null (con aviso) si falta algo */
+  function datosFormulario() {
     const taskName = document.getElementById('nombreTarea').value.trim();
     const rubrica  = document.getElementById('rubrica').value.trim();
     const curso    = document.getElementById('cursoForm').value;
+    if (!taskName) { showToast('Escribe el nombre de la tarea', 'error'); return null; }
+    if (!rubrica)  { showToast('Escribe la rúbrica o pulsa «Proponer rúbrica»', 'error'); return null; }
+    return { taskName, rubrica, curso };
+  }
 
-    if (!zipFile)   return showToast('Sube el ZIP con las entregas', 'error');
-    if (!taskName)  return showToast('Escribe el nombre de la tarea', 'error');
-    if (!rubrica)   return showToast('Escribe la rúbrica o pulsa «Proponer rúbrica»', 'error');
-
-    let alumnos;
-    if (grupoId) {
-      if (!alumnosGrupoSel.length) return showToast('Este grupo no tiene alumnos. Impórtalos desde el Cuaderno.', 'error');
-      if (!tareaDestino()) return showToast('Elige la tarea del cuaderno (o crea una nueva)', 'error');
-      alumnos = alumnosGrupoSel;
-    } else {
-      const excelFile = document.getElementById('excelFile').files[0];
-      if (!excelFile) return showToast('Sube el Excel de alumnos o elige un grupo del cuaderno', 'error');
-      if (!alumnosData.length) await onExcelSelected(document.getElementById('excelFile'));
-      if (!alumnosData.length) return showToast('El Excel no tiene alumnos', 'error');
-      alumnos = alumnosData;
+  /* Alumnos del grupo elegido o del Excel; null (con aviso) si no hay */
+  async function alumnosParaCorregir() {
+    if (document.getElementById('selGrupo').value) {
+      if (!alumnosGrupoSel.length) { showToast('Este grupo no tiene alumnos. Impórtalos desde el Cuaderno.', 'error'); return null; }
+      if (!tareaDestino()) { showToast('Elige la tarea del cuaderno (o crea una nueva)', 'error'); return null; }
+      return alumnosGrupoSel;
     }
+    const excelFile = document.getElementById('excelFile').files[0];
+    if (!excelFile) { showToast('Sube el Excel de alumnos o elige un grupo del cuaderno', 'error'); return null; }
+    if (!alumnosData.length) await onExcelSelected(document.getElementById('excelFile'));
+    if (!alumnosData.length) { showToast('El Excel no tiene alumnos', 'error'); return null; }
+    return alumnosData;
+  }
 
-    if (perfil && perfil.creditos < alumnos.length &&
-        !confirm(`Tienes ${perfil.creditos} correcciones y la clase tiene ${alumnos.length} alumnos. Se corregirán hasta agotar el saldo. ¿Continuar?`)) return;
+  function confirmarCreditos(n) {
+    return !(perfil && perfil.creditos < n &&
+      !confirm(`Tienes ${perfil.creditos} correcciones y hay ${n} alumnos por corregir. Se corregirán hasta agotar el saldo. ¿Continuar?`));
+  }
 
-    /* La rúbrica se queda guardada en la tarea para la próxima vez */
-    if (tareaDestino()) {
-      sbClient.from('tareas').update({ rubrica }).eq('id', tareaDestino()).then(({ error }) => {
-        const t = tareasGrupoSel.find(t => t.id === tareaDestino());
-        if (!error && t) t.rubrica = rubrica;
-      });
-    }
+  /* La rúbrica se queda guardada en la tarea para la próxima vez (y para la corrección nocturna) */
+  async function guardarRubricaEnTarea(rubrica) {
+    const tarea = tareaSel();
+    if (!tarea || tarea.rubrica === rubrica) return;
+    const { error } = await sbClient.from('tareas').update({ rubrica }).eq('id', tarea.id);
+    if (!error) tarea.rubrica = rubrica;
+  }
 
+  /* Pinta una tarjeta por alumno y corrige de 3 en 3 las que tienen `corregir()`.
+     Las que ya traen resultado (corregidas por la noche) o son «sin entrega» se pintan tal cual. */
+  async function ejecutarCorreccion(lista) {
     isProcessing = true;
-    cards = alumnos.map(alumno => ({ alumno, result: null, estado: 'pendiente' }));
+    cards = lista;
     const btn = document.getElementById('btnCorregir');
+    const btnRecibidas = document.getElementById('btnCorregirRecibidas');
     btn.disabled = true;
+    btnRecibidas.disabled = true;
     btn.innerHTML = '<div class="btn-spinner"></div> Corrigiendo…';
 
     document.getElementById('progressSection').classList.remove('hidden');
@@ -1656,82 +1747,608 @@
     const total = cards.length;
     let hechas = 0;
     let sinCreditos = false;
+    cards.forEach((c, i) => {
+      if (c.result) { c.estado = 'corregida'; pintarCard(i, renderCard(i)); hechas++; }
+      else if (c.estado === 'sin-entrega') { pintarCard(i, renderErrorCard(i, 'Sin entrega', c.mensaje)); hechas++; }
+    });
+    updateProgress(`Corrigiendo… (${CORRECCIONES_EN_PARALELO} a la vez)`, hechas, total);
+    const cola = cards.map((_, i) => i).filter(i => cards[i].estado === 'pendiente');
 
-    try {
-      updateProgress('Abriendo el ZIP…', 0, total);
-      const zip = await JSZip.loadAsync(zipFile);
-      const rutas = filtrarPorTarea(
-        Object.keys(zip.files).filter(r => !zip.files[r].dir && EXT_VALIDAS.test(r) && !r.startsWith('__MACOSX')),
-        taskName);
-
-      let siguiente = 0;
-      async function trabajador() {
-        while (siguiente < total) {
-          const i = siguiente++;
-          const { alumno } = cards[i];
-
-          if (sinCreditos) {
-            cards[i].estado = 'error';
-            pintarCard(i, renderErrorCard(i, 'Sin correcciones', 'Se agotó el saldo antes de llegar a este alumno.'));
-            continue;
-          }
-
-          try {
-            const rutasAlumno = buscarArchivosAlumno(rutas, alumno.nombre);
-            if (!rutasAlumno.length) {
-              cards[i].estado = 'sin-entrega';
-              pintarCard(i, renderErrorCard(i, 'Sin entrega', 'No hay ningún archivo de este alumno en el ZIP.'));
-              continue;
-            }
-
-            document.querySelector(`#card-${i} .skeleton-body span`).textContent = 'Corrigiendo…';
-            const archivo = await leerArchivoZip(zip, rutasAlumno[0]);
-            if (archivo.sizeMB > MAX_MB_ARCHIVO) {
-              cards[i].estado = 'error';
-              pintarCard(i, renderErrorCard(i, 'Archivo grande',
-                `El PDF ocupa ${archivo.sizeMB.toFixed(1)} MB y el máximo es ${MAX_MB_ARCHIVO} MB. Exporta el PDF comprimido o como fotos.`));
-              continue;
-            }
-
-            const result = await api('corregir', {
-              archivo_base64: archivo.base64,
-              tipo_archivo:   archivo.tipo,
-              nombre_alumno:  alumno.nombre,
-              curso,
-              nombre_tarea:   taskName,
-              rubrica,
-            });
-            if (typeof result.creditos_restantes === 'number') pintarCreditos(result.creditos_restantes);
-            cards[i].result = result;
-            cards[i].estado = 'corregida';
-            pintarCard(i, renderCard(i));
-          } catch (e) {
+    async function trabajador() {
+      while (cola.length) {
+        const i = cola.shift();
+        if (sinCreditos) {
+          cards[i].estado = 'error';
+          pintarCard(i, renderErrorCard(i, 'Sin correcciones', 'Se agotó el saldo antes de llegar a este alumno.'));
+          hechas++;
+          continue;
+        }
+        try {
+          document.querySelector(`#card-${i} .skeleton-body span`).textContent = 'Corrigiendo…';
+          const result = await cards[i].corregir();
+          if (typeof result.creditos_restantes === 'number') pintarCreditos(result.creditos_restantes);
+          cards[i].result = result;
+          cards[i].estado = 'corregida';
+          pintarCard(i, renderCard(i));
+        } catch (e) {
+          if (e.codigo === 'SIN_ENTREGA') {
+            cards[i].estado = 'sin-entrega';
+            pintarCard(i, renderErrorCard(i, 'Sin entrega', e.message));
+          } else {
             if (e.codigo === 'SIN_CREDITOS') sinCreditos = true;
             cards[i].estado = 'error';
-            pintarCard(i, renderErrorCard(i, e.codigo === 'SIN_CREDITOS' ? 'Sin correcciones' : '⚠️ Error', e.message));
-          } finally {
-            hechas++;
-            updateProgress(`Corrigiendo… (${CORRECCIONES_EN_PARALELO} a la vez)`, hechas, total);
+            pintarCard(i, renderErrorCard(i, e.titulo || (e.codigo === 'SIN_CREDITOS' ? 'Sin correcciones' : '⚠️ Error'), e.message));
           }
+        } finally {
+          hechas++;
+          updateProgress(`Corrigiendo… (${CORRECCIONES_EN_PARALELO} a la vez)`, hechas, total);
         }
       }
+    }
 
+    try {
       await Promise.all(Array.from({ length: CORRECCIONES_EN_PARALELO }, trabajador));
-
       updateProgress('✅ Corrección completada', total, total);
       renderStats();
       ordenarPorAtencion();
       const corregidas = cards.filter(c => c.result).length;
       showToast(`Listo: ${corregidas} de ${total} corregidas`, corregidas ? 'success' : 'warning');
       if (sinCreditos) abrirCompra('Te has quedado sin correcciones a mitad de la clase. Compra un bono y vuelve a lanzar solo los que faltan.');
-
     } catch (e) {
       showToast('Error inesperado: ' + e.message, 'error');
     } finally {
       isProcessing = false;
       btn.disabled = false;
       btn.innerHTML = '🚀 Corregir clase';
+      cargarBandeja();
     }
+  }
+
+  /* ══════════════════════════════════════
+     CANAL 1: ZIP de Teams o de Aules/Moodle
+  ══════════════════════════════════════ */
+
+  /* Los archivos de la última versión del alumno (varias fotos = varias páginas), en orden */
+  async function leerEntregaZip(zip, rutasAlumno) {
+    const ultima = versionNum(rutasAlumno[0]);
+    const rutas = rutasAlumno.filter(r => versionNum(r) === ultima)
+      .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
+      .slice(0, MAX_PAGINAS);
+    const archivos = [];
+    let mb = 0;
+    for (const ruta of rutas) {
+      const a = await leerArchivoZip(zip, ruta);
+      if (mb + a.sizeMB > MAX_MB_ARCHIVO) {
+        if (!archivos.length) {
+          throw errorTarjeta('Archivo grande', `El PDF ocupa ${a.sizeMB.toFixed(1)} MB y el máximo es ${MAX_MB_ARCHIVO} MB. Exporta el PDF comprimido o como fotos.`);
+        }
+        break;
+      }
+      mb += a.sizeMB;
+      archivos.push({ base64: a.base64, tipo: a.tipo });
+    }
+    return archivos;
+  }
+
+  async function corregirClase() {
+    if (isProcessing) return;
+    const zipFile = document.getElementById('zipFile').files[0];
+    if (!zipFile && archivosEscaneo.length) return corregirEscaneo();
+    if (!zipFile) {
+      return showToast('Sube el ZIP con las entregas o el escaneo con pegatinas QR' +
+        (tareaSel() ? ', o pulsa «Corregir lo recibido»' : ''), 'error');
+    }
+    const datos = datosFormulario();
+    if (!datos) return;
+    const alumnos = await alumnosParaCorregir();
+    if (!alumnos || !confirmarCreditos(alumnos.length)) return;
+    guardarRubricaEnTarea(datos.rubrica);
+
+    let zip, rutas;
+    try {
+      updateProgress('Abriendo el ZIP…', 0, 0);
+      zip = await JSZip.loadAsync(zipFile);
+      rutas = filtrarPorTarea(
+        Object.keys(zip.files).filter(r => !zip.files[r].dir && EXT_VALIDAS.test(r) && !r.startsWith('__MACOSX')),
+        datos.taskName);
+    } catch (e) {
+      return showToast('No se pudo abrir el ZIP: ' + e.message, 'error');
+    }
+
+    await ejecutarCorreccion(alumnos.map(alumno => ({
+      alumno, result: null, estado: 'pendiente',
+      corregir: async () => {
+        const rutasAlumno = buscarArchivosAlumno(rutas, alumno.nombre);
+        if (!rutasAlumno.length) throw errorTarjeta('Sin entrega', 'No hay ningún archivo de este alumno en el ZIP.', 'SIN_ENTREGA');
+        const archivos = await leerEntregaZip(zip, rutasAlumno);
+        return api('corregir', { archivos, nombre_alumno: alumno.nombre, curso: datos.curso, nombre_tarea: datos.taskName, rubrica: datos.rubrica });
+      },
+    })));
+  }
+
+  /* ══════════════════════════════════════
+     CANAL 2: entregas recibidas por enlace o por correo
+  ══════════════════════════════════════ */
+
+  function tareaSel() {
+    return tareasGrupoSel.find(t => t.id === tareaDestino()) || null;
+  }
+
+  function tokenAleatorio() {
+    const bytes = crypto.getRandomValues(new Uint8Array(24));
+    return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function enlaceEntrega(tarea) {
+    return `${location.origin}/entregar.html?t=${tarea.token_entrega}`;
+  }
+
+  async function cargarBandeja() {
+    const caja = document.getElementById('bandeja');
+    const tarea = tareaSel();
+    if (!tarea) { caja.classList.add('hidden'); entregasTarea = []; return; }
+    caja.classList.remove('hidden');
+    const { data, error } = await sbClient.from('entregas')
+      .select('id,alumno_id,estado,resultado,canal,nombre_fichero,remitente,ruta,created_at')
+      .eq('tarea_id', tarea.id)
+      .in('estado', ['pendiente', 'corrigiendo', 'corregida', 'error', 'aprobada'])
+      .order('created_at');
+    if (tareaSel()?.id !== tarea.id) return;   // se cambió de tarea mientras cargaba
+    if (error) {
+      document.getElementById('bandejaResumen').textContent = 'No se han podido cargar las entregas.';
+      return;
+    }
+    entregasTarea = data || [];
+    pintarBandeja();
+  }
+
+  function entregasPorAlumno() {
+    const por = {};
+    for (const e of entregasTarea) if (e.alumno_id) (por[e.alumno_id] ??= []).push(e);
+    return por;
+  }
+
+  function pintarBandeja() {
+    const tarea = tareaSel();
+    if (!tarea) return;
+    const por = entregasPorAlumno();
+    const conEntrega = alumnosGrupoSel.filter(a => por[a.id]);
+    let sinCorregir = 0, paraRevisar = 0, enCurso = 0;
+    for (const a of conEntrega) {
+      const estados = por[a.id].map(e => e.estado);
+      if (estados.some(s => s === 'pendiente' || s === 'error')) sinCorregir++;
+      else if (estados.includes('corrigiendo')) enCurso++;
+      else if (estados.includes('corregida')) paraRevisar++;
+    }
+    const sinId = entregasTarea.filter(e => !e.alumno_id && e.estado === 'pendiente');
+
+    const partes = [];
+    if (conEntrega.length) partes.push(`${conEntrega.length} de ${alumnosGrupoSel.length} alumnos han entregado`);
+    if (sinCorregir) partes.push(`${sinCorregir} sin corregir`);
+    if (enCurso) partes.push(`${enCurso} corrigiéndose esta noche`);
+    if (paraRevisar) partes.push(`${paraRevisar} corregidas, para revisar`);
+    if (sinId.length) partes.push(`${sinId.length} sin identificar`);
+    const estadoEnlace = !tarea.token_entrega ? 'Crea el enlace y compártelo con tu clase.'
+      : tarea.entrega_abierta ? '' : 'La entrega está cerrada.';
+    document.getElementById('bandejaResumen').textContent =
+      (partes.length ? partes.join(' · ') : 'Todavía no ha llegado nada.') + (estadoEnlace ? ' ' + estadoEnlace : '') +
+      (tarea.correccion_auto ? ' 🌙 Se corrige sola por la noche.' : '');
+
+    const btn = document.getElementById('btnCorregirRecibidas');
+    btn.disabled = isProcessing || !(sinCorregir || paraRevisar);
+    btn.textContent = sinCorregir ? `✏️ Corregir lo recibido (${sinCorregir})` : paraRevisar ? `👀 Revisar lo corregido (${paraRevisar})` : '✏️ Corregir lo recibido';
+
+    const opciones = '<option value="">¿De quién es?</option>' +
+      alumnosGrupoSel.map(a => `<option value="${esc(a.id)}">${esc(a.nombre)}</option>`).join('');
+    document.getElementById('sinIdentificar').innerHTML = sinId.map(e => `
+      <div class="sin-identificar-item">
+        <span class="que">${e.canal === 'correo' ? '📧' : '🔗'} ${esc(e.remitente || 'Sin remitente')} · ${esc(e.nombre_fichero || 'archivo')}</span>
+        <select id="asignar-${esc(e.id)}">${opciones}</select>
+        <button class="btn btn-secondary btn-sm" onclick="asignarEntrega('${esc(e.id)}')">Asignar</button>
+        <button class="btn btn-secondary btn-sm" onclick="verArchivos(['${esc(e.ruta)}'], 'Archivo recibido')">👁</button>
+        <button class="btn btn-secondary btn-sm" onclick="descartarEntrega('${esc(e.id)}')" title="No es de esta tarea">Descartar</button>
+      </div>`).join('');
+  }
+
+  async function asignarEntrega(id) {
+    const alumnoId = document.getElementById('asignar-' + id).value;
+    if (!alumnoId) return showToast('Elige de qué alumno es', 'error');
+    const { error } = await sbClient.from('entregas').update({ alumno_id: alumnoId }).eq('id', id);
+    if (error) return showToast('No se pudo asignar: ' + error.message, 'error');
+    showToast('✅ Asignada', 'success');
+    cargarBandeja();
+  }
+
+  async function descartarEntrega(id) {
+    const { error } = await sbClient.from('entregas').update({ estado: 'descartada' }).eq('id', id);
+    if (error) return showToast('No se pudo descartar: ' + error.message, 'error');
+    cargarBandeja();
+  }
+
+  async function verArchivos(rutas, titulo) {
+    rutas = rutas.filter(Boolean);
+    if (!rutas.length) return showToast('El archivo ya no está guardado', 'warning');
+    const { data, error } = await sbClient.storage.from('entregas').createSignedUrls(rutas, 600);
+    if (error) return showToast('No se pudo abrir: ' + error.message, 'error');
+    abrirModal(`
+      <h3>${esc(titulo)}</h3>
+      <div class="enlaces-trabajo">${data.map((d, j) => d.signedUrl
+        ? `<a class="btn btn-secondary btn-sm" href="${esc(d.signedUrl)}" target="_blank" rel="noopener">📄 ${data.length > 1 ? 'Página ' + (j + 1) : 'Abrir'}</a>`
+        : '<span>Archivo no disponible</span>').join('')}</div>
+      <div class="modal-actions"><button class="btn btn-secondary btn-sm" onclick="cerrarModal()">Cerrar</button></div>`);
+  }
+
+  function verTrabajo(i) {
+    verArchivos((cards[i].entregas || []).map(e => e.ruta), `Trabajo de ${cards[i].alumno.nombre}`);
+  }
+
+  /* Aprobada la nota, la entrega queda cerrada y su archivo se borra: no guardamos trabajos de más */
+  async function cerrarEntregas(entregas) {
+    const { error } = await sbClient.from('entregas').update({ estado: 'aprobada' }).in('id', entregas.map(e => e.id));
+    if (error) return console.warn('No se pudo cerrar la entrega:', error.message);
+    const rutas = entregas.map(e => e.ruta).filter(Boolean);
+    if (rutas.length) await sbClient.storage.from('entregas').remove(rutas);
+  }
+
+  async function corregirRecibidas() {
+    if (isProcessing) return;
+    const tarea = tareaSel();
+    if (!tarea) return;
+    const rubrica = document.getElementById('rubrica').value.trim();
+    const curso = document.getElementById('cursoForm').value;
+    if (!rubrica) return showToast('Escribe la rúbrica o pulsa «Proponer rúbrica»', 'error');
+    await guardarRubricaEnTarea(rubrica);
+    await cargarBandeja();
+
+    const por = entregasPorAlumno();
+    const corregibles = (id) => (por[id] || []).filter(e => ['pendiente', 'error', 'corregida'].includes(e.estado));
+    const necesita = (id) => corregibles(id).some(e => e.estado !== 'corregida');
+    const conAlgo = alumnosGrupoSel.filter(a => corregibles(a.id).length);
+    if (!conAlgo.length) return showToast('No hay entregas por corregir ni por revisar', 'warning');
+    if (!confirmarCreditos(conAlgo.filter(a => necesita(a.id)).length)) return;
+
+    await ejecutarCorreccion(alumnosGrupoSel.map(alumno => {
+      const entregas = corregibles(alumno.id);
+      if (!entregas.length) {
+        const aprobada = (por[alumno.id] || []).some(e => e.estado === 'aprobada');
+        return { alumno, result: null, estado: 'sin-entrega',
+          mensaje: aprobada ? 'Ya aprobaste su corrección.' : 'Todavía no ha entregado nada.' };
+      }
+      const hecha = entregas.find(e => e.estado === 'corregida' && e.resultado);
+      return {
+        alumno, entregas,
+        result: necesita(alumno.id) ? null : hecha.resultado,
+        estado: 'pendiente',
+        corregir: () => api('corregir-entregas', { tarea_id: tarea.id, alumno_id: alumno.id, curso, rubrica }),
+      };
+    }));
+  }
+
+  async function modalEnlaceEntrega() {
+    const tarea = tareaSel();
+    if (!tarea) return;
+    if (!tarea.token_entrega) {
+      const token = tokenAleatorio();
+      const { error } = await sbClient.from('tareas').update({ token_entrega: token, entrega_abierta: true }).eq('id', tarea.id);
+      if (error) return showToast('No se pudo crear el enlace: ' + error.message, 'error');
+      Object.assign(tarea, { token_entrega: token, entrega_abierta: true });
+      pintarBandeja();
+    }
+    const url = enlaceEntrega(tarea);
+    abrirModal(`
+      <h3>🔗 Enlace de entrega · ${esc(tarea.titulo)}</h3>
+      <p style="font-size:14px;color:var(--text-muted);">Pégalo en Teams, Classroom, Aules o donde avises a tu clase. Cada alumno elige su nombre y sube su trabajo desde el móvil, sin cuenta. Te llega aquí, ya ordenado por alumno.</p>
+      <div class="enlace-caja">
+        <input type="text" id="enlaceInput" readonly value="${esc(url)}" onclick="this.select()">
+        <button class="btn btn-primary btn-sm" onclick="copiarEnlace()">Copiar</button>
+      </div>
+      <div class="qr-enlace" id="qrEnlace"></div>
+      <label class="interruptor"><input type="checkbox" id="chkAbierta" ${tarea.entrega_abierta ? 'checked' : ''} onchange="cambiarEntregaAbierta(this)">
+        <span>Aceptar entregas<small>Desmárcalo cuando acabe el plazo.</small></span></label>
+      <label class="interruptor"><input type="checkbox" id="chkAuto" ${tarea.correccion_auto ? 'checked' : ''} onchange="cambiarCorreccionAuto(this)">
+        <span>Corregir sola por la noche<small>Con la rúbrica de ahora y a mitad de coste. Por la mañana lo tienes listo para revisar y aprobar.</small></span></label>
+      <div class="modal-actions">
+        <button class="btn btn-secondary btn-sm" onclick="nuevoEnlace()">Cambiar el enlace</button>
+        <button class="btn btn-secondary btn-sm" onclick="cerrarModal()">Cerrar</button>
+      </div>`);
+    try {
+      await cargarLibreria('qrcode');
+      document.getElementById('qrEnlace').innerHTML = svgQR(url) + 'Para proyectarlo en clase';
+    } catch (_) { /* sin QR no pasa nada: queda el enlace */ }
+  }
+
+  async function copiarEnlace() {
+    const input = document.getElementById('enlaceInput');
+    try { await navigator.clipboard.writeText(input.value); showToast('📋 Enlace copiado', 'success'); }
+    catch (_) { input.select(); showToast('Cópialo con Ctrl+C', 'warning'); }
+  }
+
+  async function cambiarEntregaAbierta(chk) {
+    const tarea = tareaSel();
+    const { error } = await sbClient.from('tareas').update({ entrega_abierta: chk.checked }).eq('id', tarea.id);
+    if (error) { chk.checked = !chk.checked; return showToast('No se pudo cambiar: ' + error.message, 'error'); }
+    tarea.entrega_abierta = chk.checked;
+    pintarBandeja();
+    showToast(chk.checked ? 'Entrega abierta' : 'Entrega cerrada: el enlace ya no acepta trabajos', 'success');
+  }
+
+  async function cambiarCorreccionAuto(chk) {
+    const tarea = tareaSel();
+    const rubrica = document.getElementById('rubrica').value.trim();
+    const grupo = gruposCache.find(g => g.id === document.getElementById('selGrupo').value);
+    if (chk.checked && !rubrica) { chk.checked = false; return showToast('Escribe antes la rúbrica: es la que se usará por la noche', 'error'); }
+    if (chk.checked && !CURSOS.some(([v]) => v === grupo?.nivel)) {
+      chk.checked = false;
+      return showToast('Este grupo no tiene curso. Créalo de nuevo con su curso para usar la corrección nocturna.', 'error');
+    }
+    const cambios = chk.checked ? { correccion_auto: true, rubrica } : { correccion_auto: false };
+    const { error } = await sbClient.from('tareas').update(cambios).eq('id', tarea.id);
+    if (error) { chk.checked = !chk.checked; return showToast('No se pudo cambiar: ' + error.message, 'error'); }
+    Object.assign(tarea, cambios);
+    pintarBandeja();
+    showToast(chk.checked ? '🌙 Lo que llegue se corregirá solo cada noche' : 'Corrección nocturna desactivada', 'success');
+  }
+
+  async function nuevoEnlace() {
+    if (!confirm('El enlace actual dejará de funcionar. ¿Crear uno nuevo?')) return;
+    const tarea = tareaSel();
+    const token = tokenAleatorio();
+    const { error } = await sbClient.from('tareas').update({ token_entrega: token }).eq('id', tarea.id);
+    if (error) return showToast('No se pudo cambiar: ' + error.message, 'error');
+    tarea.token_entrega = token;
+    modalEnlaceEntrega();
+  }
+
+  /* ══════════════════════════════════════
+     CANAL 3: escaneo de libretas con pegatinas QR
+     Todo se hace en el navegador: las páginas no salen del ordenador hasta corregirlas.
+  ══════════════════════════════════════ */
+
+  const cargasLibreria = {};
+  function cargarLibreria(nombre) {
+    return cargasLibreria[nombre] ??= new Promise((resolve, reject) => {
+      const [src, integrity] = LIBRERIAS[nombre];
+      const script = document.createElement('script');
+      Object.assign(script, { src, integrity, crossOrigin: 'anonymous', onload: resolve });
+      script.onerror = () => { delete cargasLibreria[nombre]; reject(new Error('No se pudo cargar una librería. Revisa la conexión.')); };
+      document.head.appendChild(script);
+    });
+  }
+
+  function svgQR(texto) {
+    const qr = qrcode(0, 'M');
+    qr.addData(texto);
+    qr.make();
+    return qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+  }
+
+  const LADO_LECTURA_QR = 2000;   // resolución a la que se buscan las pegatinas
+
+  function reducirCanvas(canvas, lado) {
+    const escala = Math.min(1, lado / Math.max(canvas.width, canvas.height));
+    if (escala === 1) return canvas;
+    const c = document.createElement('canvas');
+    c.width = Math.round(canvas.width * escala);
+    c.height = Math.round(canvas.height * escala);
+    c.getContext('2d').drawImage(canvas, 0, 0, c.width, c.height);
+    return c;
+  }
+
+  function leerQR(canvas) {
+    // jsQR es lento con imágenes grandes: primero en pequeño y, si no la encuentra, a tamaño completo
+    for (const lado of [1000, LADO_LECTURA_QR]) {
+      const c = reducirCanvas(canvas, lado);
+      const d = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, c.width, c.height);
+      const r = jsQR(d.data, d.width, d.height, { inversionAttempts: 'dontInvert' });
+      if (r?.data) return r.data;
+      if (c === canvas) break;
+    }
+    return null;
+  }
+
+  /* De cada página solo se guarda un JPEG ligero y la pegatina leída: así caben 30 libretas en memoria */
+  async function procesarPagina(canvas) {
+    const qr = leerQR(canvas);
+    const peque = reducirCanvas(canvas, MAX_LADO_IMAGEN);
+    const blob = await new Promise(r => peque.toBlob(r, 'image/jpeg', 0.8));
+    canvas.width = canvas.height = 0;
+    return { qr, blob };
+  }
+
+  async function leerPaginasEscaneo(files, avisar) {
+    const hayPdf = files.some(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
+    await Promise.all([cargarLibreria('jsqr'), hayPdf ? cargarLibreria('pdfjs') : null]);
+    if (hayPdf) pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+    const ordenados = [...files].sort((a, b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
+    const paginas = [];
+    for (const f of ordenados) {
+      if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf') {
+        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise;
+        for (let n = 1; n <= pdf.numPages; n++) {
+          const pagina = await pdf.getPage(n);
+          const base = pagina.getViewport({ scale: 1 });
+          const viewport = pagina.getViewport({ scale: LADO_LECTURA_QR / Math.max(base.width, base.height) });
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(viewport.width);
+          canvas.height = Math.round(viewport.height);
+          await pagina.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+          paginas.push(await procesarPagina(canvas));
+          pagina.cleanup();
+          avisar(paginas.length);
+        }
+        pdf.destroy();
+      } else {
+        const bmp = await createImageBitmap(f);
+        const canvas = document.createElement('canvas');
+        const escala = Math.min(1, LADO_LECTURA_QR / Math.max(bmp.width, bmp.height));
+        canvas.width = Math.round(bmp.width * escala);
+        canvas.height = Math.round(bmp.height * escala);
+        canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+        paginas.push(await procesarPagina(canvas));
+        avisar(paginas.length);
+      }
+    }
+    return paginas;
+  }
+
+  /* Cada pegatina abre las páginas de un alumno; las siguientes sin pegatina son suyas */
+  function agruparPorQR(paginas, alumnos) {
+    const ids = new Set(alumnos.map(a => a.id));
+    const porAlumno = {};
+    let actual = null;
+    let sinPegatina = 0;
+    for (const p of paginas) {
+      if (p.qr) {
+        const id = p.qr.startsWith(PREFIJO_QR) ? p.qr.slice(PREFIJO_QR.length) : null;
+        actual = ids.has(id) ? id : null;   // pegatina de otro grupo u otro QR: no se atribuye a nadie
+      }
+      if (actual) (porAlumno[actual] ??= []).push(p);
+      else sinPegatina++;
+    }
+    return { porAlumno, sinPegatina };
+  }
+
+  async function recomprimir(blob, lado, calidad) {
+    const bmp = await createImageBitmap(blob);
+    const escala = Math.min(1, lado / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(bmp.width * escala);
+    c.height = Math.round(bmp.height * escala);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    return new Promise(r => c.toBlob(r, 'image/jpeg', calidad));
+  }
+
+  /* Que todas las páginas quepan en una petición (límite de Vercel); si no, se comprimen más */
+  async function paginasParaEnviar(paginas) {
+    const aBase64 = async (blobs) => Promise.all(blobs.map(async b => ({ base64: await blobABase64(b), tipo: 'jpeg' })));
+    const mb = (arr) => arr.reduce((s, a) => s + a.base64.length * 3 / 4, 0) / 1024 / 1024;
+    let archivos = await aBase64(paginas.map(p => p.blob));
+    if (mb(archivos) > MAX_MB_ARCHIVO) {
+      archivos = await aBase64(await Promise.all(paginas.map(p => recomprimir(p.blob, 1200, 0.6))));
+    }
+    if (mb(archivos) > MAX_MB_ARCHIVO) {
+      throw errorTarjeta('Demasiadas páginas', `Sus ${paginas.length} páginas no caben en una corrección. Escanéalas con menos resolución.`);
+    }
+    return archivos;
+  }
+
+  async function corregirEscaneo() {
+    if (!document.getElementById('selGrupo').value || !alumnosGrupoSel.length) {
+      return showToast('Para el escaneo con QR elige el grupo del cuaderno: las pegatinas son de sus alumnos.', 'error');
+    }
+    if (!tareaDestino()) return showToast('Elige la tarea del cuaderno (o crea una nueva)', 'error');
+    const datos = datosFormulario();
+    if (!datos) return;
+
+    isProcessing = true;
+    const btn = document.getElementById('btnCorregir');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="btn-spinner"></div> Leyendo pegatinas…';
+    document.getElementById('progressSection').classList.remove('hidden');
+    let paginas;
+    try {
+      paginas = await leerPaginasEscaneo(archivosEscaneo, n => updateProgress(`Leyendo página ${n} y su pegatina…`, 0, 0));
+    } catch (e) {
+      showToast('No se pudo leer el escaneo: ' + e.message, 'error');
+      return;
+    } finally {
+      isProcessing = false;
+      btn.disabled = false;
+      btn.innerHTML = '🚀 Corregir clase';
+    }
+
+    const { porAlumno, sinPegatina } = agruparPorQR(paginas, alumnosGrupoSel);
+    const encontrados = alumnosGrupoSel.filter(a => porAlumno[a.id]);
+    if (!encontrados.length) {
+      updateProgress('', 0, 0);
+      return showToast('No he encontrado ninguna pegatina QR de este grupo. ¿Es el grupo correcto?', 'error');
+    }
+    if (!confirmarCreditos(encontrados.length)) return;
+    guardarRubricaEnTarea(datos.rubrica);
+    if (sinPegatina) showToast(`${sinPegatina} ${sinPegatina === 1 ? 'página no tenía' : 'páginas no tenían'} pegatina delante y no se han corregido.`, 'warning');
+
+    await ejecutarCorreccion(alumnosGrupoSel.map(alumno => {
+      const suyas = porAlumno[alumno.id];
+      if (!suyas) return { alumno, result: null, estado: 'sin-entrega', mensaje: 'No hay ninguna página con su pegatina en el escaneo.' };
+      return {
+        alumno, result: null, estado: 'pendiente',
+        corregir: async () => {
+          if (suyas.length > MAX_PAGINAS) throw errorTarjeta('Demasiadas páginas', `Tiene ${suyas.length} páginas y el máximo es ${MAX_PAGINAS}. ¿Falta la pegatina del siguiente alumno?`);
+          const archivos = await paginasParaEnviar(suyas);
+          return api('corregir', { archivos, nombre_alumno: alumno.nombre, curso: datos.curso, nombre_tarea: datos.taskName, rubrica: datos.rubrica });
+        },
+      };
+    }));
+  }
+
+  async function imprimirPegatinas() {
+    if (!grupoActual) return;
+    const ventana = window.open('', '_blank');   // antes de esperar, o el navegador la bloquea
+    if (!ventana) return showToast('Permite las ventanas emergentes para imprimir las pegatinas', 'warning');
+    try {
+      const { data: alumnos, error } = await sbClient.from('alumnos').select('id,nombre,apellidos')
+        .eq('grupo_id', grupoActual.id).eq('activo', true).order('apellidos').order('nombre');
+      if (error) throw error;
+      if (!alumnos?.length) { ventana.close(); return showToast('Este grupo no tiene alumnos', 'warning'); }
+      await cargarLibreria('qrcode');
+      const pegatinas = alumnos.map(a => `<div class="pegatina">${svgQR(PREFIJO_QR + a.id)}
+        <div class="nombre">${esc([a.nombre, a.apellidos].filter(Boolean).join(' '))}<small>${esc(grupoActual.nombre)}</small></div></div>`).join('');
+      ventana.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+        <title>Pegatinas QR · ${esc(grupoActual.nombre)}</title>
+        <style>
+          @page { size: A4; margin: 13mm 0; }
+          body { margin: 0; font-family: system-ui, sans-serif; color: #0F172A; }
+          .aviso { padding: 16px; font-size: 14px; line-height: 1.5; background: #F0FDF4; }
+          .aviso button { font: inherit; padding: 6px 14px; margin-top: 8px; cursor: pointer; }
+          @media print { .aviso { display: none; } }
+          .hoja { display: grid; grid-template-columns: repeat(3, 70mm); grid-auto-rows: 37mm; justify-content: center; }
+          .pegatina { display: flex; align-items: center; gap: 3mm; padding: 3mm; border: 1px dashed #CBD5E1; overflow: hidden; break-inside: avoid; }
+          .pegatina svg { width: 29mm; height: 29mm; flex-shrink: 0; }
+          .nombre { font-size: 11pt; font-weight: 600; line-height: 1.2; }
+          .nombre small { display: block; font-weight: 400; font-size: 8pt; color: #64748B; margin-top: 2mm; }
+        </style></head><body>
+        <div class="aviso"><strong>Pegatinas de ${esc(grupoActual.nombre)}</strong><br>
+          Imprímelas en hojas de etiquetas de 3×8 (70×37 mm) o en papel normal y recórtalas.
+          Cada alumno pega la suya en la tapa o en la primera página de su libreta: sirve para todo el curso.
+          Al escanear, pon la página con la pegatina delante de las de ese alumno.<br>
+          <button onclick="print()">🖨️ Imprimir</button></div>
+        <div class="hoja">${pegatinas}</div></body></html>`);
+      ventana.document.close();
+    } catch (e) {
+      ventana.close();
+      showToast('No se pudieron preparar las pegatinas: ' + e.message, 'error');
+    }
+  }
+
+  /* ══════════════════════════════════════
+     CANAL 4: buzón de correo del grupo
+  ══════════════════════════════════════ */
+
+  async function modalBuzon() {
+    if (!grupoActual) return;
+    const { data: grupo, error } = await sbClient.from('grupos').select('id,nombre,buzon').eq('id', grupoActual.id).single();
+    if (error) return showToast('No se pudo abrir el buzón: ' + error.message, 'error');
+    let buzon = grupo.buzon;
+    if (!buzon) {
+      const base = norm(grupo.nombre).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'grupo';
+      const sufijo = [...crypto.getRandomValues(new Uint8Array(5))].map(b => b.toString(16).padStart(2, '0')).join('');
+      buzon = `${base}-${sufijo}`;
+      const { error: errB } = await sbClient.from('grupos').update({ buzon }).eq('id', grupo.id);
+      if (errB) return showToast('No se pudo crear el buzón: ' + errB.message, 'error');
+    }
+    const direccion = `${buzon}@${DOMINIO_ENTREGAS}`;
+    abrirModal(`
+      <h3>📧 Buzón de ${esc(grupo.nombre)}</h3>
+      <p style="font-size:14px;color:var(--text-muted);">Tus alumnos pueden enviar su trabajo a esta dirección, como adjunto (fotos o PDF), desde su correo de siempre.</p>
+      <div class="enlace-caja">
+        <input type="text" id="enlaceInput" readonly value="${esc(direccion)}" onclick="this.select()">
+        <button class="btn btn-primary btn-sm" onclick="copiarEnlace()">Copiar</button>
+      </div>
+      <ul style="font-size:13px;color:var(--text-muted);padding-left:18px;display:flex;flex-direction:column;gap:6px;">
+        <li>Si el correo del alumno está en tu lista, se reconoce solo. Si no, te aparece como «sin identificar» para que elijas de quién es.</li>
+        <li>Que pongan el nombre de la tarea en el asunto. Si no lo ponen, va a la última tarea con la entrega abierta.</li>
+      </ul>
+      <div class="modal-actions"><button class="btn btn-secondary btn-sm" onclick="cerrarModal()">Cerrar</button></div>`);
   }
 
   /* ══════════════════════════════════════
