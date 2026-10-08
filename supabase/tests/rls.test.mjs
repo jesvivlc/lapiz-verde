@@ -105,5 +105,58 @@ ok((await q(`select acreditar_pago('cs_1', $1, 100, 900) r`, [B])).rows[0].r ===
 ok((await q(`select creditos from perfiles where id=$1`, [B])).rows[0].creditos === 100, 'saldo final 100');
 await db.exec(`reset role;`);
 
+console.log('== 003 entregas (dos veces) ==');
+// Réplica mínima de Supabase Storage para probar el bloque del almacén
+await db.exec(`
+create schema storage;
+create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
+create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text);
+create function storage.foldername(name text) returns text[] language sql immutable as $$ select (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1) - 1] $$;
+grant usage on schema storage to anon, authenticated, service_role;
+grant select, delete on storage.objects to authenticated;
+alter table storage.objects enable row level security;
+`);
+const m3 = fs.readFileSync(REPO + '003_entregas.sql', 'utf8');
+await db.exec(m3); await db.exec(m3); ok(true, '003 ejecutada dos veces sin error');
+await expectErr(q(`update tareas set token_entrega = 'corto' where id = '33333333-3333-3333-3333-333333333333'`), 'token de entrega corto → rechazado');
+await q(`update tareas set token_entrega = $1, entrega_abierta = true where id = '33333333-3333-3333-3333-333333333333'`, ['a'.repeat(40)]);
+ok(true, 'token largo aceptado');
+ok((await q(`select public from storage.buckets where id = 'entregas'`)).rows[0]?.public === false, 'almacén "entregas" creado y privado');
+await q(`insert into storage.objects (bucket_id, name) values ('entregas', $1), ('entregas', $2)`, [`${A}/t/1.pdf`, `${B}/t/2.pdf`]);
+await asUser(A, async () => {
+  const filas = (await q(`select name from storage.objects`)).rows;
+  ok(filas.length === 1 && filas[0].name.startsWith(A), 'en el almacén, Bruno solo ve su carpeta');
+});
+// segundo grupo de Bruno con un alumno, para probar reasignaciones entre grupos
+await q(`insert into grupos (id, owner_id, nombre) values ('44444444-4444-4444-4444-444444444444', $1, 'Otro grupo de Bruno')`, [A]);
+await q(`insert into alumnos (id, grupo_id, owner_id, nombre) values ('55555555-5555-5555-5555-555555555555', '44444444-4444-4444-4444-444444444444', $1, 'Pepe')`, [A]);
+await q(`insert into alumnos (id, grupo_id, owner_id, nombre) values ('66666666-6666-6666-6666-666666666666', '11111111-1111-1111-1111-111111111111', $1, 'Eva')`, [A]);
+// el servidor crea las entregas
+await db.exec(`set role service_role;`);
+const E = (await q(`insert into entregas (owner_id, tarea_id, alumno_id, canal, ruta, estado) values ($1, '33333333-3333-3333-3333-333333333333', null, 'correo', 'x', 'pendiente') returning id`, [A])).rows[0].id;
+await db.exec(`reset role;`);
+
+await asUser(A, async () => {
+  ok((await q(`select count(*)::int c from entregas`)).rows[0].c === 1, 'Bruno ve su entrega');
+  await q(`update entregas set alumno_id = '66666666-6666-6666-6666-666666666666' where id = $1`, [E]);
+  ok((await q(`select alumno_id from entregas where id = $1`, [E])).rows[0].alumno_id === '66666666-6666-6666-6666-666666666666', 'Bruno asigna la entrega a un alumno del grupo de la tarea');
+  await expectErr(q(`update entregas set alumno_id = '55555555-5555-5555-5555-555555555555' where id = $1`, [E]), 'no puede asignarla a un alumno de OTRO grupo');
+  await expectErr(q(`update entregas set resultado = '{"nota":10}' where id = $1`, [E]), 'no puede escribir el resultado de la IA');
+  await expectErr(q(`insert into entregas (owner_id, tarea_id, canal) values ($1, '33333333-3333-3333-3333-333333333333', 'enlace')`, [A]), 'no puede crear entregas (solo el servidor)');
+  await q(`update entregas set estado = 'descartada' where id = $1`, [E]); ok(true, 'puede descartarla');
+  await expectErr(q(`select * from lotes_ia`), 'no ve los lotes de la IA');
+});
+await asUser(B, async () => {
+  ok((await q(`select count(*)::int c from entregas`)).rows[0].c === 0, 'B no ve las entregas de Bruno');
+  ok((await q(`update entregas set alumno_id = null returning id`)).rows.length === 0, 'B no puede modificarlas');
+  ok((await q(`delete from entregas returning id`)).rows.length === 0, 'B no puede borrarlas');
+});
+await db.exec(`set role anon;`);
+await expectErr(q(`select * from entregas`), 'anónimo no puede leer entregas');
+await db.exec(`reset role;`);
+await asUser(A, async () => {
+  ok((await q(`delete from entregas where id = $1 returning id`, [E])).rows.length === 1, 'Bruno puede borrar su entrega');
+});
+
 console.log(fails ? `\n${fails} FALLOS` : '\nTodo correcto');
 process.exit(fails ? 1 : 0);
