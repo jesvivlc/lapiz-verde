@@ -270,6 +270,7 @@ const { default: entrega, etiquetasAlumnos } = await import('../api/entrega.js')
 reiniciar(); res = respuesta();
 await entrega(peticion({ token: null, body: { accion: 'info', t: TOKEN } }), res);
 ok(res.statusCode === 200 && res.cuerpo.tarea.titulo === 'Libreta semana 12' && res.cuerpo.alumnos.length === 2, 'con el enlace: tarea y alumnos SOLO de ese grupo');
+ok(res.cuerpo.profesor === 'Bruno', 'incluye la firma del profesor para la página');
 ok(JSON.stringify(res.cuerpo).indexOf('López García') === -1 && !JSON.stringify(res.cuerpo).includes('email'), 'no expone apellidos completos ni correos');
 ok(etiquetasAlumnos([{ id: 1, nombre: 'Ana', apellidos: 'López' }, { id: 2, nombre: 'Ana', apellidos: 'Lucas' }, { id: 3, nombre: 'Leo', apellidos: 'Gil' }])
   .map((a) => a.etiqueta).join('|') === 'Ana López|Ana Lucas|Leo G.', 'dos «Ana L.» → se distinguen por el primer apellido');

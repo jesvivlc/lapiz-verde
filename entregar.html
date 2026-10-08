@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex">
-  <title>Entregar tarea — Lápiz Verde</title>
+  <title>Entregar tarea</title>
   <style>
     :root {
       --primary: #16A34A; --primary-dark: #15803D; --primary-light: #F0FDF4;
@@ -14,7 +14,6 @@
     * { box-sizing: border-box; }
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
     main { max-width: 520px; margin: 0 auto; padding: 24px 16px 48px; }
-    .marca { font-weight: 800; color: var(--primary-dark); font-size: 15px; margin-bottom: 16px; }
     .card { background: var(--surface); border-radius: var(--radius); padding: 24px 20px; box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.05); }
     h1 { font-size: 22px; margin: 0 0 4px; }
     .sub { color: var(--text-muted); font-size: 14px; margin: 0 0 20px; }
@@ -44,8 +43,7 @@
 </head>
 <body>
 <main>
-  <div class="marca">✏️ Lápiz Verde</div>
-
+  <!-- Sin marca a propósito: la página es del profesor, no del producto -->
   <div class="card" id="cargando"><p class="sub">Cargando…</p></div>
 
   <div class="card hidden" id="formulario">
@@ -124,7 +122,8 @@
     try {
       const info = await api({ accion: 'info' });
       $('titulo').textContent = info.tarea.titulo;
-      $('grupo').textContent = info.grupo.nombre ? `Entrega para ${info.grupo.nombre}` : '';
+      $('grupo').textContent = [info.grupo.nombre && `Entrega para ${info.grupo.nombre}`, info.profesor].filter(Boolean).join(' · ');
+      document.title = `Entregar: ${info.tarea.titulo}`;
       $('alumno').insertAdjacentHTML('beforeend',
         info.alumnos.map((a) => `<option value="${esc(a.id)}">${esc(a.etiqueta)}</option>`).join(''));
       const anterior = guardado('lv-alumno-' + token);

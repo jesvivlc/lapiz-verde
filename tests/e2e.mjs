@@ -52,7 +52,7 @@ async function prepararRuta(route) {
       const b = req.postDataJSON(); llamadasEntregas.push(b);
       if (b.t !== 'T'.repeat(32)) return json({ error: 'Este enlace no es válido.' }, 404);
       if (b.accion === 'info') {
-        return json({ tarea: { titulo: 'Libreta semana 12' }, grupo: { nombre: '3.º ESO A' }, alumnos: [{ id: 'a-1', etiqueta: 'Ana L.' }, { id: 'a-2', etiqueta: 'Luis P.' }] });
+        return json({ tarea: { titulo: 'Libreta semana 12' }, grupo: { nombre: '3.º ESO A' }, profesor: 'Bruno', alumnos: [{ id: 'a-1', etiqueta: 'Ana L.' }, { id: 'a-2', etiqueta: 'Luis P.' }] });
       }
       if (b.accion === 'preparar') return json({ subidas: b.archivos.map((_, i) => ({ id: 'n-' + i, url: `https://fyoyyvzyoohsczceeyde.supabase.co/storage/v1/object/upload/sign/entregas/u-1/t/n-${i}.jpg?token=x` })) });
       return json({ recibidas: b.ids.length, total: b.ids.length });
@@ -376,12 +376,7 @@ console.log('== Cuaderno: pegatinas QR y buzón ==');
   await popup.screenshot({ path: OUT + '10-pegatinas.png', fullPage: true });
   await popup.close();
 
-  await page.click('text=📧 Buzón del grupo');
-  await page.waitForSelector('#enlaceInput');
-  const dir = await page.inputValue('#enlaceInput');
-  const pb = patches.find(p => p.tabla === 'grupos');
-  ok(pb && /^[a-z0-9-]{12,48}$/.test(pb.b.buzon) && dir === `${pb.b.buzon}@entregas.lapizverde.com`, 'crea el buzón del grupo: ' + dir);
-  await page.screenshot({ path: OUT + '11-buzon.png' });
+  ok(await page.isHidden('#btnBuzon'), 'el buzón no se ofrece hasta tener un dominio neutro');
   ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
 }
 
@@ -396,6 +391,10 @@ console.log('== Página del alumno (entregar.html) ==');
   await page.goto('https://app.test/entregar.html#t=' + 'T'.repeat(32));
   await page.waitForSelector('#formulario:not(.hidden)');
   ok((await page.textContent('#titulo')) === 'Libreta semana 12', 'muestra la tarea');
+  ok((await page.textContent('#grupo')) === 'Entrega para 3.º ESO A · Bruno', 'con el grupo y el nombre del profe');
+  const texto = (await page.innerText('body')) + ' ' + await page.title();   // solo lo que se ve
+  ok(!/lápiz verde|\bIA\b|inteligencia artificial/i.test(texto),
+    'la página del alumno no menciona la marca ni la IA');
   ok((await page.$$eval('#alumno option', o => o.length)) === 3, 'lista los alumnos para elegir');
   ok(await page.isDisabled('#enviar'), 'sin nombre ni archivo no se puede entregar');
   await page.selectOption('#alumno', 'a-1');

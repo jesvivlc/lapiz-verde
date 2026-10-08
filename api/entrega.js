@@ -39,8 +39,9 @@ export function etiquetasAlumnos(alumnos) {
 
 async function info(body, res) {
   const tarea = await tareaDelToken(body.t);
-  const [{ data: grupo }, { data: alumnos, error }] = await Promise.all([
+  const [{ data: grupo }, { data: perfil }, { data: alumnos, error }] = await Promise.all([
     sbAdmin().from('grupos').select('nombre').eq('id', tarea.grupo_id).maybeSingle(),
+    sbAdmin().from('perfiles').select('nombre').eq('id', tarea.owner_id).maybeSingle(),
     sbAdmin().from('alumnos').select('id,nombre,apellidos')
       .eq('grupo_id', tarea.grupo_id).eq('activo', true).order('nombre').order('apellidos'),
   ]);
@@ -49,6 +50,7 @@ async function info(body, res) {
   return res.status(200).json({
     tarea: { titulo: tarea.titulo },
     grupo: { nombre: grupo?.nombre ?? '' },
+    profesor: perfil?.nombre ?? '',   // la firma que el profesor eligió; la página no muestra ninguna marca
     alumnos: etiquetasAlumnos(alumnos || []),
   });
 }

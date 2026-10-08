@@ -932,7 +932,7 @@
               <input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="importarAlumnos(this)">
             </label>
             <button class="btn btn-secondary btn-sm" onclick="imprimirPegatinas()">🏷️ Pegatinas QR</button>
-            <button class="btn btn-secondary btn-sm" onclick="modalBuzon()">📧 Buzón del grupo</button>
+            <button class="btn btn-secondary btn-sm hidden" id="btnBuzon" onclick="modalBuzon()">📧 Buzón del grupo</button>
             <button class="btn btn-primary btn-sm" onclick="modalNuevaTarea()">+ Nueva tarea</button>
           </div>
         </div>
@@ -970,7 +970,9 @@
   const MAX_MB_ARCHIVO = 3.2;     // límite de Vercel: 4,5 MB por petición, ya en base64
   const MAX_PAGINAS = 10;         // archivos o páginas por alumno en una corrección
   const PREFIJO_QR = 'LV1:';      // contenido de las pegatinas: LV1:<id del alumno>
-  const DOMINIO_ENTREGAS = 'entregas.lapizverde.com';
+  /* Buzón de correo del grupo: desactivado hasta tener un dominio neutro para alumnos y familias
+     (la dirección no debe delatar el producto). Para activarlo: poner aquí ese dominio. */
+  const DOMINIO_ENTREGAS = null;
 
   /* Librerías que solo hacen falta a veces: se cargan al usarlas, con versión fija e integridad */
   const LIBRERIAS = {
@@ -1030,6 +1032,7 @@
     setupDropzone('escaneoZone', 'escaneoFile', /\.(pdf|jpe?g|png|webp|heic)$/i, onEscaneoSelected, true);
     document.getElementById('formLogin').addEventListener('submit', enviarEnlace);
     document.getElementById('sinIdentificar').addEventListener('click', onClickSinIdentificar);
+    document.getElementById('btnBuzon').classList.toggle('hidden', !DOMINIO_ENTREGAS);
 
     sbClient.auth.onAuthStateChange((evento, session) => {
       if (session?.user && usuario?.id !== session.user.id) entrar(session.user);
@@ -2349,7 +2352,7 @@
   ══════════════════════════════════════ */
 
   async function modalBuzon() {
-    if (!grupoActual) return;
+    if (!grupoActual || !DOMINIO_ENTREGAS) return;
     const { data: grupo, error } = await sbClient.from('grupos').select('id,nombre,buzon').eq('id', grupoActual.id).single();
     if (error) return showToast('No se pudo abrir el buzón: ' + error.message, 'error');
     let buzon = grupo.buzon;
