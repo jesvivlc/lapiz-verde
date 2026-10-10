@@ -627,6 +627,11 @@
     }
     label.interruptor input { margin-top: 4px; }
     label.interruptor small { display: block; color: var(--text-muted); font-size: 12px; }
+    .pn-opcion { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin: 12px 0; }
+    .pn-opcion p { font-size: 13px; color: var(--text-muted); margin: 4px 0 10px; }
+    .pn-opcion .btn { text-transform: none; letter-spacing: 0; }
+    .pn-resultado { font-size: 13px; margin-top: 8px; }
+    .pn-resultado ul { margin: 4px 0; padding-left: 18px; }
     .enlaces-trabajo { display: flex; gap: 8px; flex-wrap: wrap; }
 
     /* ── Responsive ── */
@@ -933,6 +938,7 @@
             </label>
             <button class="btn btn-secondary btn-sm" onclick="imprimirPegatinas()">🏷️ Pegatinas QR</button>
             <button class="btn btn-secondary btn-sm hidden" id="btnBuzon" onclick="modalBuzon()">📧 Buzón del grupo</button>
+            <button class="btn btn-secondary btn-sm" onclick="modalPasarNotas()">📤 Pasar notas</button>
             <button class="btn btn-primary btn-sm" onclick="modalNuevaTarea()">+ Nueva tarea</button>
           </div>
         </div>
@@ -953,6 +959,7 @@
 
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
+<script src="pasar-notas.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.min.js" integrity="sha384-dl/4LkSyQ4uEucc48NM6VDZLAjLLq9yMzZ5JLXumBq7Ld33XBof73hseOqPhO89+" crossorigin="anonymous"></script>
 <script>
   /* ── Supabase ── */
@@ -990,6 +997,7 @@
   let alumnosGrupoSel = [];
 
   let grupoActual = null;      // cuaderno
+  let alumnosActuales = [];
   let tareasActuales = [];
   let notasCache = {};
   let cellsDirty = new Set();
@@ -2584,7 +2592,7 @@
     notasCache = {};
     const [{ data: alumnos, error: eA }, { data: tareas, error: eT }] = await Promise.all([
       sbClient.from('alumnos')
-        .select('id,nombre,apellidos')
+        .select('id,nombre,apellidos,email')
         .eq('grupo_id', grupoId)
         .eq('activo', true)
         .order('apellidos')
@@ -2604,6 +2612,7 @@
     }
 
     tareasActuales = tareas || [];
+    alumnosActuales = alumnos;
 
     if (tareasActuales.length) {
       const { data: nd, error: eN } = await sbClient
@@ -2670,8 +2679,8 @@
       </div>`;
   }
 
-  function calcularMedia(alumnoId) {
-    const notas = tareasActuales
+  function calcularMedia(alumnoId, tareas = tareasActuales) {
+    const notas = tareas
       .map(t => notasCache[`${alumnoId}_${t.id}`]?.nota)
       .filter(n => n != null && n !== '');
     if (!notas.length) return null;
@@ -2731,6 +2740,188 @@
       }
     } catch (e) {
       showToast('Error al guardar: ' + e.message, 'error');
+    }
+  }
+
+  /* ══════════════════════════════════════
+     PASAR NOTAS a Moodle/Aules (hoja de calificaciones), a la extensión
+     del navegador (Classroom, ITACA, Séneca…) o copiando y pegando.
+     Todo ocurre en este navegador: no se conecta con ninguna plataforma.
+  ══════════════════════════════════════ */
+
+  let extensionLista = false;
+  let respuestaExtension = null;
+  window.addEventListener('message', ev => {
+    if (ev.source !== window || ev.origin !== location.origin) return;
+    if (ev.data?.tipo === 'lapiz-verde/extension') {
+      extensionLista = true;
+      const txt = document.getElementById('pnExtTexto');
+      if (txt) txt.textContent = textoExtension();
+    }
+    if (['lapiz-verde/notas-recibidas', 'lapiz-verde/notas-error'].includes(ev.data?.tipo)) respuestaExtension?.(ev.data);
+  });
+
+  function textoExtension() {
+    return extensionLista
+      ? 'La extensión está instalada. Envíale las notas, abre la página donde van y pulsa su icono → «Rellenar esta página». Solo rellena: tú revisas y guardas.'
+      : 'Rellena las notas en la página que tengas abierta (Classroom, ITACA, Séneca, Aules…), como si las teclearas tú. Instálala una vez en tu ordenador: descárgala y sigue el LEEME.';
+  }
+
+  function nombreEvaluacion(e) {
+    return /^\d$/.test(String(e)) ? `${e}.ª evaluación` : String(e);
+  }
+
+  function modalPasarNotas() {
+    if (!grupoActual || !alumnosActuales.length) return showToast('Este grupo no tiene alumnos', 'warning');
+    if (!tareasActuales.length) return showToast('Crea primero una tarea y pon notas', 'warning');
+    const evaluaciones = [...new Set(tareasActuales.map(t => t.evaluacion).filter(Boolean))];
+    const opciones = [
+      ...tareasActuales.slice().reverse().map(t => `<option value="t:${esc(t.id)}">${esc(t.titulo)}</option>`),
+      ...evaluaciones.map(e => `<option value="e:${esc(e)}">Media de la ${esc(nombreEvaluacion(e))}</option>`),
+      '<option value="m">Media de todas las tareas</option>',
+    ].join('');
+    abrirModal(`
+      <h3>📤 Pasar notas · ${esc(grupoActual.nombre)}</h3>
+      <div class="form-group"><label for="pnQue">¿Qué notas?</label><select id="pnQue">${opciones}</select></div>
+      <label class="interruptor"><input type="checkbox" id="pnComentario" checked>
+        <span>Con el comentario de la corrección<small>Solo en las tareas corregidas aquí; las medias van sin comentario.</small></span></label>
+      <div class="pn-opcion">
+        <strong>Moodle: Aules, EducamosCLM, Moodle Centros, EducaMadrid…</strong>
+        <p>En la tarea de Moodle: «Ver todas las entregas» → «Acción sobre las calificaciones» → «Descargar hoja de calificaciones». Elígela aquí y te devolvemos la hoja rellena para subirla en «Subir hoja de calificaciones».</p>
+        <label class="btn btn-secondary btn-sm">📄 Elegir la hoja (.csv)<input type="file" id="pnHoja" accept=".csv,text/csv" class="hidden" onchange="rellenarHoja(this)"></label>
+        <div id="pnResultado" class="pn-resultado"></div>
+      </div>
+      <div class="pn-opcion">
+        <strong>Extensión «Pasar notas»: Classroom, ITACA, Séneca…</strong>
+        <p id="pnExtTexto">${textoExtension()}</p>
+        <button class="btn btn-primary btn-sm" onclick="enviarAExtension(this)">Enviar a la extensión</button>
+        <button class="btn btn-secondary btn-sm" onclick="descargarExtension(this)">⬇️ Descargar la extensión</button>
+      </div>
+      <div class="pn-opcion">
+        <strong>Copiar y pegar</strong>
+        <p>Alumno y nota en columnas, para pegar en una hoja de cálculo o en cualquier tabla.</p>
+        <button class="btn btn-secondary btn-sm" onclick="copiarNotas()">📋 Copiar notas</button>
+      </div>
+      <div class="modal-actions"><button class="btn btn-secondary btn-sm" onclick="cerrarModal()">Cerrar</button></div>`);
+    window.postMessage({ tipo: 'lapiz-verde/hola' }, location.origin);
+  }
+
+  /* [{nombre, apellidos, email, nota, comentario}] de lo elegido en «¿Qué notas?» */
+  async function notasParaPasar() {
+    const que = document.getElementById('pnQue').value;
+    const conComentario = document.getElementById('pnComentario').checked;
+    const titulo = document.getElementById('pnQue').selectedOptions[0].textContent;
+    const base = a => ({ nombre: a.nombre, apellidos: a.apellidos || '', email: a.email || '' });
+    if (que.startsWith('t:')) {
+      const tareaId = que.slice(2);
+      const { data, error } = await sbClient.from('notas')
+        .select('alumno_id,nota,comentario_ia,mejoras_ia,mensaje_motivador')
+        .eq('tarea_id', tareaId).in('alumno_id', alumnosActuales.map(a => a.id));
+      if (error) throw error;
+      const porAlumno = Object.fromEntries((data || []).map(n => [n.alumno_id, n]));
+      return { titulo, conComentario, alumnos: alumnosActuales.map(a => {
+        const n = porAlumno[a.id];
+        return { ...base(a), nota: n?.nota ?? null, comentario: conComentario ? PasarNotas.textoComentario(n, perfil?.nombre) : '' };
+      }) };
+    }
+    const tareas = que === 'm' ? tareasActuales : tareasActuales.filter(t => String(t.evaluacion) === que.slice(2));
+    return { titulo, conComentario: false, alumnos: alumnosActuales.map(a => {
+      const media = calcularMedia(a.id, tareas);
+      return { ...base(a), nota: media === null ? null : Math.round(media * 100) / 100, comentario: '' };
+    }) };
+  }
+
+  function listaHtml(titulo, nombres) {
+    return nombres.length ? `<div>${titulo}<ul>${nombres.map(n => `<li>${esc(n)}</li>`).join('')}</ul></div>` : '';
+  }
+
+  async function rellenarHoja(input) {
+    const archivo = input.files[0];
+    input.value = '';
+    const salida = document.getElementById('pnResultado');
+    if (!archivo) return;
+    try {
+      const { alumnos, conComentario } = await notasParaPasar();
+      const r = PasarNotas.rellenarHojaMoodle(await archivo.text(), alumnos, { conComentario });
+      if (!r.rellenadas) {
+        salida.innerHTML = `<div style="color:var(--danger)">No he podido poner ninguna nota: ningún alumno de la hoja tiene nota en lo que has elegido.</div>` +
+          listaHtml('No están en este grupo del cuaderno:', r.noEncontrados);
+        return;
+      }
+      const nombre = archivo.name.replace(/\.csv$/i, '') + ' (rellena).csv';
+      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([r.csv], { type: 'text/csv' })), download: nombre });
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      salida.innerHTML =
+        `<div style="color:var(--success);font-weight:600">✔ ${r.rellenadas} ${r.rellenadas === 1 ? 'nota puesta' : 'notas puestas'}. Se ha descargado «${esc(nombre)}».</div>` +
+        `<div>Súbela en la misma tarea: «Acción sobre las calificaciones» → «Subir hoja de calificaciones». Moodle te enseña los cambios antes de guardarlos.</div>` +
+        (r.sinComentarios ? '<div style="color:var(--warning)">Esta tarea de Moodle no tiene activados los «Comentarios de retroalimentación»: solo van las notas.</div>' : '') +
+        listaHtml('Sin nota en el cuaderno (se quedan en blanco):', r.sinNota) +
+        listaHtml('No están en este grupo del cuaderno:', r.noEncontrados) +
+        listaHtml('Nombre dudoso, ponlos a mano:', r.ambiguos);
+    } catch (e) {
+      salida.innerHTML = `<div style="color:var(--danger)">${esc(e.message)}</div>`;
+    }
+  }
+
+  async function enviarAExtension(btn) {
+    btn.disabled = true;
+    try {
+      const { titulo, alumnos } = await notasParaPasar();
+      if (!alumnos.some(a => a.nota != null)) return showToast('No hay ninguna nota en lo que has elegido', 'warning');
+      const recibido = new Promise(resolve => {
+        respuestaExtension = resolve;
+        setTimeout(() => resolve(null), 1500);
+      });
+      window.postMessage({ tipo: 'lapiz-verde/notas', datos: {
+        titulo, grupo: grupoActual.nombre,
+        alumnos: alumnos.map(({ nombre, apellidos, nota, comentario }) => ({ nombre, apellidos, nota, comentario })),
+      } }, location.origin);
+      const r = await recibido;
+      respuestaExtension = null;
+      if (r?.tipo === 'lapiz-verde/notas-recibidas') {
+        showToast(`✔ Notas enviadas a la extensión. Abre la página donde van y pulsa su icono.`, 'success');
+      } else {
+        showToast('No encuentro la extensión. Descárgala e instálala (LEEME), y recarga esta página.', 'warning');
+      }
+    } catch (e) {
+      showToast(e.message, 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  const ARCHIVOS_EXTENSION = ['manifest.json', 'puente.js', 'popup.html', 'popup.js', 'rellenar.js', 'LEEME.txt'];
+
+  async function descargarExtension(btn) {
+    btn.disabled = true;
+    try {
+      const zip = new JSZip();
+      const carpeta = zip.folder('pasar-notas');
+      for (const nombre of ARCHIVOS_EXTENSION) {
+        const r = await fetch('extension/' + nombre);
+        if (!r.ok) throw new Error('No se pudo descargar la extensión. Inténtalo de nuevo.');
+        carpeta.file(nombre, await r.text());
+      }
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'pasar-notas.zip' });
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      showToast('Descargada. Descomprímela y sigue el LEEME para instalarla.', 'success');
+    } catch (e) {
+      showToast(e.message, 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function copiarNotas() {
+    try {
+      const { alumnos, conComentario } = await notasParaPasar();
+      await navigator.clipboard.writeText(PasarNotas.tablaParaCopiar(alumnos, { conComentario }));
+      showToast('📋 Notas copiadas: pégalas en tu hoja de cálculo', 'success');
+    } catch (e) {
+      showToast('No se pudo copiar: ' + e.message, 'error');
     }
   }
 

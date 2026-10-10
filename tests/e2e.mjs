@@ -51,6 +51,11 @@ async function prepararRuta(route) {
   if (url.host === 'app.test') {
     if (url.pathname === '/' || url.pathname === '/index.html') return route.fulfill({ contentType: 'text/html', body: fs.readFileSync(REPO + 'index.html') });
     if (url.pathname === '/entregar.html') return route.fulfill({ contentType: 'text/html', body: fs.readFileSync(REPO + 'entregar.html') });
+    if (url.pathname === '/pasar-notas.js' || /^\/extension\/[\w.-]+$/.test(url.pathname)) {
+      const f = REPO + url.pathname.slice(1);
+      if (!fs.existsSync(f)) return route.fulfill({ status: 404, body: '' });
+      return route.fulfill({ contentType: f.endsWith('.js') ? 'text/javascript' : f.endsWith('.json') ? 'application/json' : 'text/plain', body: fs.readFileSync(f) });
+    }
     if (url.pathname === '/api/entrega') {
       const b = req.postDataJSON(); llamadasEntregas.push(b);
       if (b.t !== 'T'.repeat(32)) return json({ error: 'Este enlace no es válido.' }, 404);
@@ -420,6 +425,156 @@ console.log('== Página del alumno (entregar.html) ==');
   await page.waitForSelector('#fallo:not(.hidden)');
   ok((await page.textContent('#falloTexto')).includes('no es válido'), 'enlace malo → mensaje claro');
   ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
+}
+
+console.log('== Pasar notas: hoja de Moodle, extensión y copiar ==');
+{
+  db.notas = [
+    { alumno_id: 'a-1', tarea_id: 't-1', nota: 9.2, faltas: null, origen: 'markmate', comentario_ia: 'Muy buen <comentario>.', mejoras_ia: 'uno\ndos', mensaje_motivador: '¡Sigue así!' },
+    { alumno_id: 'a-2', tarea_id: 't-1', nota: 4.6, faltas: null, origen: 'manual' },
+  ];
+  const { page, ctx, errores } = await prepararPagina(browser, { conSesion: true });
+  await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://app.test' });
+  // La extensión en la página: su puente con un chrome.storage de mentira
+  await page.evaluate(() => { window.__guardado = null; window.chrome = { storage: { local: { set: async (o) => { window.__guardado = o; } } } }; });
+  await page.addScriptTag({ path: REPO + 'extension/puente.js' });
+  await page.waitForSelector('#app:not(.hidden)');
+  await page.click('.tab-btn[data-tab="cuaderno"]');
+  await page.waitForSelector('.grupo-card');
+  await page.click('.grupo-card');
+  await page.waitForSelector('.notas-table');
+  await page.click('text=📤 Pasar notas');
+  await page.waitForSelector('#pnQue');
+  ok((await page.$$eval('#pnQue option', o => o.map(x => x.textContent))).join('|') === 'Comentario tema 3|Media de la 1.ª evaluación|Media de todas las tareas', 'elige tarea, media de la evaluación o media total');
+  await page.waitForFunction(() => document.getElementById('pnExtTexto').textContent.includes('está instalada'));
+  ok(true, 'detecta que la extensión está instalada');
+
+  // Hoja de calificaciones de Aules
+  const hoja = '﻿"Identificador","Nombre completo","Dirección de correo","Estado","Calificación","Calificación máxima","Última modificación (calificación)","Comentarios de retroalimentación"\n' +
+    '"Participante 1","Ana López García","ana@x.es","Enviado","","100,00","-",""\n' +
+    '"Participante 2","Luis Pérez","","Enviado","","100,00","-",""\n' +
+    '"Participante 3","Marta Ruiz","","Sin entrega","","100,00","-",""\n' +
+    '"Participante 4","Alguien Nuevo","","Sin entrega","","100,00","-",""\n';
+  const descarga = page.waitForEvent('download');
+  await page.setInputFiles('#pnHoja', { name: 'calificaciones-tarea.csv', mimeType: 'text/csv', buffer: Buffer.from(hoja) });
+  const d = await descarga;
+  const csv = fs.readFileSync(await d.path(), 'utf8');
+  ok(d.suggestedFilename() === 'calificaciones-tarea (rellena).csv', 'descarga la hoja rellena con su nombre');
+  ok(csv.includes('"Participante 1","Ana López García","ana@x.es","Enviado","92,00","100,00","-","<p>Muy buen &lt;comentario&gt;.</p><p>Para mejorar:<br>1. uno<br>2. dos</p><p>¡Sigue así!</p><p>Bruno</p>"'), 'Ana: 9,2 → 92,00 sobre 100, con comentario escapado y firma');
+  ok(csv.includes('"Participante 2","Luis Pérez","","Enviado","46,00"'), 'Luis: nota manual, sin comentario');
+  const resultado = await page.textContent('#pnResultado');
+  ok(resultado.includes('2 notas puestas') && resultado.includes('Marta Ruiz') && resultado.includes('Alguien Nuevo'), 'resume lo puesto, lo que va sin nota y lo que no está');
+
+  await page.setInputFiles('#pnHoja', { name: 'otra.csv', mimeType: 'text/csv', buffer: Buffer.from('Nombre;Nota\nAna;7\n') });
+  await page.waitForFunction(() => document.getElementById('pnResultado').textContent.includes('No parece'));
+  ok(true, 'un CSV que no es de Moodle → explica cómo descargar la hoja');
+
+  // Enviar a la extensión
+  await page.click('text=Enviar a la extensión');
+  await page.waitForFunction(() => window.__guardado);
+  const g = await page.evaluate(() => window.__guardado.notas);
+  ok(g.titulo === 'Comentario tema 3' && g.grupo === '3.º ESO A' && g.alumnos.length === 4, 'la extensión recibe la tarea y los 4 alumnos');
+  ok(g.alumnos[0].nota === 9.2 && g.alumnos[0].comentario.startsWith('Muy buen') && g.alumnos[2].nota === null, 'con nota y comentario; sin nota quien no la tiene');
+  ok(g.alumnos.every(a => !('email' in a) && !('id' in a)), 'a la extensión solo van nombre, nota y comentario');
+  await page.waitForSelector('.toast.show');
+  ok((await page.textContent('#toast')).includes('enviadas a la extensión'), 'confirma el envío');
+
+  // Media de la evaluación y copiar
+  await page.selectOption('#pnQue', 'e:1');
+  await page.click('text=📋 Copiar notas');
+  await page.waitForTimeout(300);
+  const copiado = await page.evaluate(() => navigator.clipboard.readText());
+  ok(copiado.split('\n')[0] === 'López García, Ana\t9,2' && copiado.includes('Pérez, Luis\t4,6') && copiado.includes('Ruiz, Marta\t'), 'copia la media con coma, en columnas');
+
+  // Descargar la extensión
+  const descargaExt = page.waitForEvent('download');
+  await page.click('text=⬇️ Descargar la extensión');
+  const de = await descargaExt;
+  const zipExt = await JSZip.loadAsync(fs.readFileSync(await de.path()));
+  const enZip = Object.keys(zipExt.files).filter(f => !zipExt.files[f].dir).sort();
+  ok(de.suggestedFilename() === 'pasar-notas.zip' && enZip.join() === ['LEEME.txt', 'manifest.json', 'popup.html', 'popup.js', 'puente.js', 'rellenar.js'].map(f => 'pasar-notas/' + f).sort().join(), 'descarga la extensión completa en un ZIP');
+  const manifest = JSON.parse(await zipExt.file('pasar-notas/manifest.json').async('string'));
+  ok(manifest.manifest_version === 3 && !manifest.host_permissions && manifest.permissions.join() === 'storage,activeTab,scripting', 'la extensión no pide acceso a todas las webs');
+  await page.screenshot({ path: OUT + '14-pasar-notas.png', fullPage: true });
+  ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
+}
+
+console.log('== ZIP descargado de Drive (Classroom) o de OneDrive (Teams) ==');
+{
+  const { page, errores } = await prepararPagina(browser, { conSesion: true });
+  await page.waitForSelector('#app:not(.hidden)');
+  const r = await page.evaluate(() => {
+    const drive = ['Comentario tema 3/Ana López García - Comentario tema 3.pdf', 'Comentario tema 3/IMG_2041.jpg', 'Comentario tema 3/Luis Pérez - foto 1.jpg', 'Comentario tema 3/Luis Pérez - foto 2.jpg'];
+    const onedrive = ['Student Work/Submitted files/López García, Ana/Comentario tema 3/trabajo.pdf', 'Student Work/Submitted files/Pérez, Luis/Comentario tema 3/foto.png'];
+    return {
+      ana: buscarArchivosAlumno(drive, 'Ana López García'), luis: buscarArchivosAlumno(drive, 'Luis Pérez'),
+      anaOne: buscarArchivosAlumno(onedrive, 'Ana López García'), luisOne: buscarArchivosAlumno(onedrive, 'Luis Pérez'),
+    };
+  });
+  ok(r.ana.length === 1 && r.luis.length === 2, 'Drive (Classroom): archivos con el nombre del alumno, incluidas varias fotos');
+  ok(r.anaOne.length === 1 && r.luisOne.length === 1, 'OneDrive (Teams): carpeta «Apellidos, Nombre»');
+  ok(errores.length === 0, 'sin errores de JS');
+}
+
+console.log('== Extensión: rellenar páginas de calificaciones ==');
+{
+  const datos = { alumnos: [
+    { nombre: 'Ana', apellidos: 'López García', nota: 9.2, comentario: 'Muy bien, Ana' },
+    { nombre: 'Luis', apellidos: 'Pérez', nota: 4.6, comentario: 'Repasa' },
+    { nombre: 'Marta', apellidos: 'Ruiz', nota: null, comentario: '' },
+    { nombre: 'Ana', apellidos: 'López', nota: 6, comentario: '' },
+  ] };
+  const page = await browser.newPage();
+  const rellenar = async (html, op) => {
+    await page.setContent(html);
+    await page.addScriptTag({ path: REPO + 'extension/rellenar.js' });
+    return page.evaluate(([d, o]) => globalThis.__pasarNotas(d, o), [datos, op]);
+  };
+  const valores = () => page.$$eval('input:not([type=checkbox]), select, textarea', els => els.map(e => e.value));
+
+  // Aules (Moodle): calificación rápida, sobre 100, con filtro de búsqueda y casilla de comentarios
+  let r = await rellenar(`
+    <form><input type="search" placeholder="Buscar"><select name="perpage"><option>10</option><option>100</option></select>
+    <table><tr><th>Nombre</th><th>Calificación</th><th>Comentarios</th></tr>
+    <tr><td><input type="checkbox"></td><td><a>Ana López García</a><br>ana@x.es</td><td><input type="text" id="quickgrade_11" value=""> / 100,00</td><td><textarea id="quickgrade_comments_11"></textarea></td></tr>
+    <tr><td><input type="checkbox"></td><td><a>Luis Pérez Martín</a></td><td><input type="text" id="quickgrade_12" value=""> / 100,00</td><td><textarea id="quickgrade_comments_12"></textarea></td></tr>
+    <tr><td><input type="checkbox"></td><td><a>Marta Ruiz</a></td><td><input type="text" id="quickgrade_13" value=""> / 100,00</td><td><textarea id="quickgrade_comments_13"></textarea></td></tr>
+    <tr><td><input type="checkbox"></td><td><a>Ana López</a></td><td><input type="text" id="quickgrade_14" value=""> / 100,00</td><td><textarea id="quickgrade_comments_14"></textarea></td></tr>
+    </table></form>`, { comentarios: true, coma: true });
+  let v = await valores();
+  ok(v.join('|') === '|10|92|Muy bien, Ana|46|Repasa|||60|', 'Aules: notas sobre 100 y comentarios en su fila (filtros intactos): ' + v.join('|'));
+  ok(r.hechos.length === 3 && r.comentarios === 2, '3 notas y 2 comentarios; Marta sin nota se queda en blanco');
+  ok(await page.$eval('#quickgrade_11', e => e.style.outline.includes('3px')), 'marca en verde lo que ha rellenado');
+
+  // Classroom: filas hechas con div, nota sobre 10 con decimales y coma; un campo de React
+  r = await rellenar(`
+    <div role="list">
+      <div role="listitem"><div><span>Ana López García</span></div><div><input aria-label="Nota" type="text"><span>/10</span></div></div>
+      <div role="listitem"><div><span>Luis Pérez</span></div><div><input aria-label="Nota" type="text"><span>/10</span></div></div>
+    </div>
+    <script>window.cambios = 0; document.querySelectorAll('input').forEach(i => i.addEventListener('input', () => window.cambios++));</script>`, { coma: true });
+  v = await valores();
+  ok(v.join('|') === '9,2|4,6', 'Classroom: nota con coma en cada fila');
+  ok(await page.evaluate(() => window.cambios) === 2, 'lanza los eventos que esperan las webs modernas');
+
+  // ITACA/Séneca: APELLIDOS, NOMBRE en mayúsculas y desplegables de notas enteras
+  r = await rellenar(`
+    <table>
+      <tr><td>LÓPEZ GARCÍA, ANA</td><td><select><option value="">-</option>${[1,2,3,4,5,6,7,8,9,10].map(n => `<option value="${n}">${n}</option>`).join('')}</select></td></tr>
+      <tr><td>PÉREZ, LUIS</td><td><select><option value="">-</option><option value="IN">Insuficiente</option><option value="SU">Suficiente</option><option value="NT">Notable</option></select></td></tr>
+    </table>`, { entero: true });
+  v = await valores();
+  ok(v.join('|') === '9|IN', 'ITACA: 9,2 → 9 y 4,6 → Insuficiente (nadie aprueba por redondeo)');
+
+  r = await rellenar(`<table><tr><td>Luis Pérez</td><td><input type="text"></td></tr></table>`, { entero: true });
+  ok((await valores()).join() === '4', 'redondear a entero: 4,6 → 4, no 5');
+
+  // Seguridad: una casilla que no está en la fila de un único alumno no se toca
+  r = await rellenar(`<div>Ana López García · Luis Pérez · Marta Ruiz <input type="text" id="global"></div>`, {});
+  ok((await valores()).join() === '' && r.hechos.length === 0, 'una casilla común a varios alumnos no se rellena');
+  r = await rellenar(`<table><tr><td>Pedro Gil</td><td><input type="text"></td></tr></table>`, {});
+  ok(r.hechos.length === 0, 'una página sin nuestros alumnos no se toca');
+  await page.close();
 }
 
 await browser.close();

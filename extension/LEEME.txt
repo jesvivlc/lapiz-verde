@@ -1,0 +1,19 @@
+PASAR NOTAS — extensión para Chrome
+
+Rellena las notas (y los comentarios) de tu cuaderno en la página de calificaciones
+que tengas abierta: Google Classroom, Aules y otros Moodle, ITACA, Séneca...
+Solo rellena: tú revisas y pulsas Guardar. Las notas no salen de tu ordenador
+y se borran solas a las 12 horas.
+
+CÓMO INSTALARLA (una sola vez)
+1. Descomprime este ZIP en una carpeta que no vayas a borrar.
+2. En Chrome, abre chrome://extensions
+3. Activa «Modo de desarrollador» (arriba a la derecha).
+4. Pulsa «Cargar descomprimida» y elige la carpeta.
+5. Fija la extensión con la chincheta del icono del puzle para tenerla a mano.
+
+CÓMO SE USA
+1. En tu cuaderno: abre el grupo → «Pasar notas» → elige la tarea → «Enviar a la extensión».
+2. Abre la página donde van las notas, con la lista de alumnos y su casilla de nota.
+3. Pulsa el icono de la extensión → «Rellenar esta página».
+4. Revisa las casillas marcadas en verde y guarda.

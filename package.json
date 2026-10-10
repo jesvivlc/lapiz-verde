@@ -16,6 +16,6 @@
   },
   "scripts": {
     "test:db": "node supabase/tests/rls.test.mjs",
-    "test": "node tests/api.test.mjs && node supabase/tests/rls.test.mjs"
+    "test": "node tests/api.test.mjs && node tests/pasar-notas.test.mjs && node supabase/tests/rls.test.mjs"
   }
 }
