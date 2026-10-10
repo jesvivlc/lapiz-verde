@@ -15,14 +15,15 @@ const ok = (c, m) => { console.log((c ? '  OK  ' : '  FAIL') + ' ' + m); if (!c)
 const pdf = Buffer.from('%PDF-1.4 falso');
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 const teams = new JSZip();
-teams.file('Comentario tema 3/Ana López García/Versión 1/trabajo.pdf', pdf);
-teams.file('Comentario tema 3/Ana López García/Versión 2/trabajo.pdf', pdf);
+const pdfDe = (quien) => Buffer.from('%PDF-1.4 ' + quien);   // el contenido dice de quién es (la petición ya no lleva el nombre)
+teams.file('Comentario tema 3/Ana López García/Versión 1/trabajo.pdf', pdfDe('Ana'));
+teams.file('Comentario tema 3/Ana López García/Versión 2/trabajo.pdf', pdfDe('Ana'));
 teams.file('Comentario tema 3/Luis Pérez/foto.png', png);
-teams.file('Comentario tema 3/Marta Ruiz/foto.jpg', png);
+teams.file('Comentario tema 3/Marta Ruiz/trabajo.pdf', pdfDe('Marta'));
 teams.file('Otra tarea/Sara Gil/x.pdf', pdf);
 fs.writeFileSync(OUT + 'teams.zip', await teams.generateAsync({ type: 'nodebuffer' }));
 const moodle = new JSZip();
-moodle.file('Ana López_1234_assignsubmission_file_/redaccion.pdf', pdf);
+moodle.file('Ana López_1234_assignsubmission_file_/redaccion.pdf', pdfDe('Ana'));
 fs.writeFileSync(OUT + 'moodle.zip', await moodle.generateAsync({ type: 'nodebuffer' }));
 
 // ── Datos simulados ──
@@ -41,6 +42,8 @@ const db = {
 db.entregas = [];
 const upserts = [], correcciones = [], patches = [], borrados = [], llamadasEntregas = [], subidas = [];
 let creditosApi = 18;
+// De quién es una corrección, por el contenido del primer archivo (Ana y Marta mandan PDF; Luis, foto)
+const quien = (b) => { const t = Buffer.from(b.archivos?.[0]?.base64 ?? '', 'base64').toString('latin1'); return t.includes('Marta') ? 'Marta' : t.includes('Ana') ? 'Ana' : 'Luis'; };
 
 async function prepararRuta(route) {
   const req = route.request(); const url = new URL(req.url());
@@ -66,8 +69,8 @@ async function prepararRuta(route) {
       const b = req.postDataJSON(); correcciones.push(b);
       if (creditosApi <= 0) return json({ error: 'No te quedan correcciones.', codigo: 'SIN_CREDITOS' }, 402);
       creditosApi--;
-      const legible = !b.nombre_alumno.startsWith('Marta');
-      return json({ nota: legible ? 7.5 : 3, nota_texto: legible ? 'Notable' : 'Insuficiente', comentario: `Comentario para ${b.nombre_alumno}`, propuestas_mejora: ['uno', 'dos', 'tres'], mensaje_motivador: '¡Sigue así!', legible, creditos_restantes: creditosApi });
+      const legible = quien(b) !== 'Marta';
+      return json({ nota: legible ? 7.5 : 3, nota_texto: legible ? 'Notable' : 'Insuficiente', comentario: `Comentario para ${quien(b)}`, propuestas_mejora: ['uno', 'dos', 'tres'], mensaje_motivador: '¡Sigue así!', legible, creditos_restantes: creditosApi });
     }
     if (url.pathname === '/api/rubrica') return json({ rubrica: '- Propuesta IA (10 pts)' });
     return route.fulfill({ status: 404, body: '' });
@@ -175,10 +178,11 @@ console.log('== Con sesión: corregir con grupo del cuaderno (ZIP de Teams) ==')
   await page.waitForSelector('#btnCorregir:not([disabled])', { timeout: 20000 });
   await page.waitForTimeout(300);
 
-  ok(correcciones.length === 3, `3 correcciones enviadas (Sara es de otra tarea): ${correcciones.map(c => c.nombre_alumno).join(', ')}`);
-  const ana = correcciones.find(c => c.nombre_alumno.startsWith('Ana'));
+  ok(correcciones.length === 3, `3 correcciones enviadas (Sara es de otra tarea): ${correcciones.map(quien).join(', ')}`);
+  ok(correcciones.every(c => !('nombre_alumno' in c) && !JSON.stringify(c).includes('López')), 'modo anónimo: ninguna petición lleva el nombre del alumno');
+  const ana = correcciones.find(c => quien(c) === 'Ana');
   ok(ana?.archivos?.length === 1 && ana.archivos[0].tipo === 'pdf', 'de Ana solo va su última versión, como pdf');
-  const luis = correcciones.find(c => c.nombre_alumno.startsWith('Luis'));
+  const luis = correcciones.find(c => quien(c) === 'Luis');
   ok(luis?.archivos?.[0]?.tipo === 'jpeg', 'imagen de Luis convertida y enviada como jpeg (antes fallaba)');
   ok(await page.textContent('#creditosChip') === '15 correcciones', 'los créditos bajan a 15');
   const primera = await page.$eval('#cardsGrid .student-card', el => el.textContent);
@@ -228,7 +232,7 @@ console.log('== ZIP de Moodle/Aules + Excel, y quedarse sin créditos ==');
   await page.setInputFiles('#zipFile', OUT + 'moodle.zip');
   await page.click('#btnCorregir');
   await page.waitForSelector('#modal:not(.hidden)', { timeout: 20000 });
-  ok(correcciones.length === 1 && correcciones[0].nombre_alumno === 'Ana López', 'encuentra a Ana en el ZIP de Moodle (sin nombre de tarea en la ruta)');
+  ok(correcciones.length === 1 && quien(correcciones[0]) === 'Ana', 'encuentra a Ana en el ZIP de Moodle (sin nombre de tarea en la ruta)');
   ok((await page.textContent('#modalContenido')).includes('9 €'), 'sin créditos → abre la compra de bonos');
   await page.screenshot({ path: OUT + '4-sin-creditos.png', fullPage: true });
   await page.click('text=Cerrar');
@@ -352,10 +356,10 @@ console.log('== Escaneo de libretas con pegatinas QR ==');
   page.once('dialog', d => d.accept());
   await page.click('#btnCorregir');
   await page.waitForFunction(() => document.getElementById('progressText').textContent.includes('completada'), null, { timeout: 60000 });
-  const porNombre = Object.fromEntries(correcciones.map(c => [c.nombre_alumno.split(' ')[0], c]));
-  ok(porNombre.Ana?.archivos?.length === 2 && porNombre.Ana.archivos.every(a => a.tipo === 'jpeg'), 'Ana: su pegatina y la página siguiente, 2 páginas en una sola corrección');
-  ok(porNombre.Marta?.archivos?.length === 1, 'Marta: 1 página');
-  ok(correcciones.length === 2, `no se corrige a nadie más (${correcciones.map(c => c.nombre_alumno).join(', ')})`);
+  const corregidos = await page.evaluate(() => cards.filter(c => c.result).map(c => c.alumno.nombre.split(' ')[0]).sort().join(','));
+  const paginas = correcciones.map(c => c.archivos.length).sort().join(',');
+  ok(corregidos === 'Ana,Marta' && correcciones.length === 2, `solo se corrige a Ana y Marta (${corregidos})`);
+  ok(paginas === '1,2' && correcciones.every(c => c.archivos.every(a => a.tipo === 'jpeg')), 'Ana: su pegatina y la página siguiente (2 páginas); Marta: 1 página');
   ok((await page.textContent('#statsBar')).includes('2 sin entrega'), 'Luis y Sara salen como sin entrega');
   await page.screenshot({ path: OUT + '9-escaneo.png', fullPage: true });
   ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));

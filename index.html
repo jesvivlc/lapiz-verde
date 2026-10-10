@@ -1865,7 +1865,7 @@
         const rutasAlumno = buscarArchivosAlumno(rutas, alumno.nombre);
         if (!rutasAlumno.length) throw errorTarjeta('Sin entrega', 'No hay ningún archivo de este alumno en el ZIP.', 'SIN_ENTREGA');
         const archivos = await leerEntregaZip(zip, rutasAlumno);
-        return api('corregir', { archivos, nombre_alumno: alumno.nombre, curso: datos.curso, nombre_tarea: datos.taskName, rubrica: datos.rubrica });
+        return api('corregir', { archivos, curso: datos.curso, nombre_tarea: datos.taskName, rubrica: datos.rubrica });
       },
     })));
   }
@@ -2302,7 +2302,7 @@
         corregir: async () => {
           if (suyas.length > MAX_PAGINAS) throw errorTarjeta('Demasiadas páginas', `Tiene ${suyas.length} páginas y el máximo es ${MAX_PAGINAS}. ¿Falta la pegatina del siguiente alumno?`);
           const archivos = await paginasParaEnviar(suyas);
-          return api('corregir', { archivos, nombre_alumno: alumno.nombre, curso: datos.curso, nombre_tarea: datos.taskName, rubrica: datos.rubrica });
+          return api('corregir', { archivos, curso: datos.curso, nombre_tarea: datos.taskName, rubrica: datos.rubrica });
         },
       };
     }));

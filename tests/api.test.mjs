@@ -179,7 +179,8 @@ const b = estado.anthropicBody;
 ok(b.model === 'claude-sonnet-5', 'usa claude-sonnet-5');
 ok(b.max_tokens === 16000, 'max_tokens 16000');
 ok(b.messages[0].content[0].cache_control?.type === 'ephemeral' && b.messages[0].content[0].text.includes('Rúbrica'), 'rúbrica primero y cacheada');
-ok(!b.messages[0].content[0].text.includes('Ana López'), 'el nombre del alumno no rompe el prefijo cacheado');
+ok(!JSON.stringify(b).includes('Ana'), 'modo anónimo: el nombre del alumno no llega a la IA aunque se mande');
+ok(b.system.includes('no conoces el nombre del alumno'), 'el prompt prohíbe escribir nombres de alumnos');
 ok(tablas.uso_ia.some((u) => u.input_tokens === 3000), 'registra el uso de tokens');
 
 reiniciar(); res = respuesta();
@@ -342,7 +343,7 @@ conEntregas(); res = respuesta();
 await corregirEntregas(peticion({ body: cuerpoCE }), res);
 const contCE = estado.anthropicBody?.messages[0].content ?? [];
 ok(res.statusCode === 200 && contCE.length === 4 && contCE[2].type === 'image' && contCE[3].type === 'document', 'corrige juntas la foto y el PDF, en orden, sin la descartada');
-ok(contCE[1].text.includes('Ana López García') && contCE[0].text.includes('Libreta semana 12'), 'nombre completo del alumno y título de la tarea');
+ok(!JSON.stringify(estado.anthropicBody).includes('López') && contCE[0].text.includes('Libreta semana 12'), 'modo anónimo: sin nombre del alumno, con título de la tarea');
 ok(tablas.entregas[0].estado === 'corregida' && tablas.entregas[1].resultado?.nota === 7.5 && tablas.entregas[2].estado === 'descartada', 'guarda la propuesta en las entregas (pendiente de aprobar)');
 ok(estado.creditos === 4, 'cobra 1 corrección');
 conEntregas(); res = respuesta();
@@ -454,7 +455,8 @@ await cron(peticionCron('enviar'), res);
 const reqs = estado.lote?.requests ?? [];
 ok(res.statusCode === 200 && res.cuerpo.enviados === 2 && reqs.length === 2, 'envía un lote con 2 alumnos (no la otra tarea ni lo sin identificar)');
 ok(reqs.every((r) => /^[0-9a-f]{32}$/.test(r.custom_id) && r.params.model === 'claude-sonnet-5'), 'peticiones con clave válida para la Batch API');
-ok(reqs.find((r) => r.params.messages[0].content[1].text.includes('Ana López García'))?.params.messages[0].content.length === 4, 'Ana: sus 2 fotos en la misma corrección');
+ok(reqs.some((r) => r.params.messages[0].content.length === 4), 'Ana: sus 2 fotos en la misma corrección');
+ok(!JSON.stringify(reqs).match(/Ana|López|Luis/), 'modo anónimo: el lote nocturno no lleva nombres de alumnos');
 ok(estado.creditos === 3, 'cobra 1 corrección por alumno');
 ok(tablas.entregas.filter((x) => x.estado === 'corrigiendo').length === 3 && tablas.lotes_ia.length === 1, 'marca las entregas como «corrigiendo» y guarda el lote');
 
@@ -469,7 +471,7 @@ res = respuesta();
 await cron(peticionCron('recoger'), res);
 ok(res.cuerpo.lotes_en_curso === 1 && tablas.entregas.filter((x) => x.estado === 'corrigiendo').length === 3, 'lote aún en marcha → no toca nada');
 estado.loteTerminado = true;
-estado.loteFallos = [loteGuardado.requests.find((r) => r.params.messages[0].content[1].text.includes('Lucas')).custom_id];
+estado.loteFallos = [loteGuardado.requests.find((r) => r.params.messages[0].content.length !== 4).custom_id];
 tablas.entregas.push({ id: 'vieja', owner_id: U1, tarea_id: T1, alumno_id: A1, ruta: `${U1}/${T1}/vieja.jpg`, estado: 'aprobada', created_at: '2026-10-01' },
   { id: 'abandonada', owner_id: U1, tarea_id: T1, alumno_id: A1, ruta: `${U1}/${T1}/abandonada.jpg`, estado: 'subiendo', created_at: '2020-01-01' });
 almacen.set(`${U1}/${T1}/vieja.jpg`, 'x');
