@@ -33,24 +33,40 @@
 
   /* El único alumno al que nombra el texto (o el del correo), o null si ninguno o varios */
   function emparejar(texto, alumnos, email) {
-    if (email) {
-      const porCorreo = alumnos.filter(a => a.email && norm(a.email).trim() === norm(email).trim());
+    const correo = norm(email).trim();
+    if (correo) {
+      const porCorreo = alumnos.filter(a => a.email && norm(a.email).trim() === correo);
       if (porCorreo.length === 1) return { alumno: porCorreo[0] };
     }
-    let candidatos = alumnos.filter(a => nombraA(texto, a));
-    if (candidatos.length === 1) return { alumno: candidatos[0] };
+    const pal = a => palabras(`${a.nombre} ${a.apellidos ?? ''}`);
+    const enTexto = new Set(palabras(texto));
+    const parcial = a => !pal(a).every(p => enTexto.has(p));
+    /* Si los dos tienen correo y no coincide, es otra persona aunque se llame igual */
+    let candidatos = alumnos.filter(a => nombraA(texto, a) && !(correo && a.email && norm(a.email).trim() !== correo));
     if (!candidatos.length) return null;
     /* Quien sale con todas sus palabras gana a quien solo coincide en nombre y primer apellido */
-    const enTexto = new Set(palabras(texto));
-    const completos = candidatos.filter(a => palabras(`${a.nombre} ${a.apellidos ?? ''}`).every(p => enTexto.has(p)));
+    const completos = candidatos.filter(a => !parcial(a));
     if (completos.length) candidatos = completos;
-    if (candidatos.length === 1) return { alumno: candidatos[0] };
+    if (candidatos.length === 1) return { alumno: candidatos[0], parcial: parcial(candidatos[0]) };
     /* "Ana López" y "Ana López García": si unos nombres contienen a otros, gana el más
        largo; dos alumnos distintos (o dos iguales) son ambiguos */
-    const pal = a => palabras(`${a.nombre} ${a.apellidos ?? ''}`);
     const contenido = (a, b) => pal(a).every(p => pal(b).includes(p)) && pal(a).length < pal(b).length;
     const finales = candidatos.filter(a => !candidatos.some(b => b !== a && contenido(a, b)));
-    return finales.length === 1 ? { alumno: finales[0] } : { ambiguo: true };
+    return finales.length === 1 ? { alumno: finales[0], parcial: parcial(finales[0]) } : { ambiguo: true };
+  }
+
+  /* Cuando a un alumno le corresponden varias filas, solo vale la que tiene su nombre
+     completo si es la única así; si no, ninguna. Devuelve, por fila, si se puede usar. */
+  function elegirFilas(rs) {
+    const porAlumno = new Map();
+    rs.forEach((r, k) => { if (r?.alumno) porAlumno.set(r.alumno, [...(porAlumno.get(r.alumno) || []), k]); });
+    const valida = rs.map(() => false);
+    for (const ks of porAlumno.values()) {
+      const completas = ks.filter(k => !rs[k].parcial);
+      if (ks.length === 1) valida[ks[0]] = true;
+      else if (completas.length === 1) valida[completas[0]] = true;
+    }
+    return valida;
   }
 
   /* ── Texto del comentario ── */
@@ -147,17 +163,18 @@
       throw new Error('La hoja no tiene la columna de calificación. En la tarea, activa «Hoja de calificaciones fuera de línea» (Configuración → Tipos de retroalimentación) y vuelve a descargarla.');
     }
     const ponerComentario = conComentario && col.comentario >= 0;
-    const res = { rellenadas: 0, sinNota: [], noEncontrados: [], ambiguos: [], sinComentarios: conComentario && col.comentario < 0 };
-    const usados = new Set();
+    const res = { rellenadas: 0, sinNota: [], noEncontrados: [], ambiguos: [], parciales: [], sinComentarios: conComentario && col.comentario < 0 };
 
-    for (const fila of hoja.filas.slice(1)) {
-      const nombreHoja = fila[col.nombre] ?? '';
-      const r = emparejar(nombreHoja, notas, col.email >= 0 ? fila[col.email] : null);
+    /* Primera pasada: a quién corresponde cada fila. Un alumno del cuaderno al que le
+       corresponden dos filas es dudoso: no se rellena ninguna de las dos */
+    const filas = hoja.filas.slice(1).map(fila => ({ fila, nombreHoja: fila[col.nombre] ?? '',
+      r: emparejar(fila[col.nombre] ?? '', notas, col.email >= 0 ? fila[col.email] : null) }));
+    const valida = elegirFilas(filas.map(f => f.r));
+
+    for (const [k, { fila, nombreHoja, r }] of filas.entries()) {
       if (!r) { res.noEncontrados.push(nombreHoja); continue; }
-      if (r.ambiguo) { res.ambiguos.push(nombreHoja); continue; }
+      if (r.ambiguo || !valida[k]) { res.ambiguos.push(nombreHoja); continue; }
       const n = r.alumno;
-      if (usados.has(n)) { res.ambiguos.push(nombreHoja); continue; }
-      usados.add(n);
       if (n.nota == null || n.nota === '' || isNaN(Number(n.nota))) { res.sinNota.push(nombreHoja); continue; }
 
       /* La nota del cuaderno es sobre 10: se pasa a la escala de la tarea, con el mismo
@@ -174,6 +191,7 @@
       fila[col.nota] = valor;
       if (ponerComentario && n.comentario) fila[col.comentario] = comentarioHtml(n.comentario);
       res.rellenadas++;
+      if (r.parcial) res.parciales.push(nombreHoja);
     }
     res.csv = escribirCsv(hoja);
     return res;
@@ -181,13 +199,14 @@
 
   /* ── Copiar y pegar: "Apellidos, Nombre<TAB>Nota[<TAB>Comentario]" ── */
   function tablaParaCopiar(notas, { conComentario = false } = {}) {
-    const limpio = s => String(s ?? '').replace(/\s+/g, ' ').trim();
+    /* Lo que empieza por = + - @ sería una fórmula al pegarlo en una hoja de cálculo */
+    const limpio = s => String(s ?? '').replace(/\s+/g, ' ').trim().replace(/^[=+\-@]/, "'$&");
     return notas.map(n => {
-      const nombre = n.apellidos ? `${n.apellidos}, ${n.nombre}` : n.nombre;
+      const nombre = limpio(n.apellidos ? `${n.apellidos}, ${n.nombre}` : n.nombre);
       const nota = n.nota == null || n.nota === '' ? '' : String(Math.round(Number(n.nota) * 100) / 100).replace('.', ',');
       return [nombre, nota, ...(conComentario ? [limpio(n.comentario)] : [])].join('\t');
     }).join('\n');
   }
 
-  global.PasarNotas = { norm, palabras, nombraA, emparejar, textoComentario, comentarioHtml, leerCsv, escribirCsv, rellenarHojaMoodle, tablaParaCopiar };
+  global.PasarNotas = { norm, palabras, nombraA, emparejar, elegirFilas, textoComentario, comentarioHtml, leerCsv, escribirCsv, rellenarHojaMoodle, tablaParaCopiar };
 })(typeof window !== 'undefined' ? window : globalThis);

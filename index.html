@@ -2858,7 +2858,8 @@
         (r.sinComentarios ? '<div style="color:var(--warning)">Esta tarea de Moodle no tiene activados los «Comentarios de retroalimentación»: solo van las notas.</div>' : '') +
         listaHtml('Sin nota en el cuaderno (se quedan en blanco):', r.sinNota) +
         listaHtml('No están en este grupo del cuaderno:', r.noEncontrados) +
-        listaHtml('Nombre dudoso, ponlos a mano:', r.ambiguos);
+        listaHtml('Nombre dudoso, ponlos a mano:', r.ambiguos) +
+        listaHtml('Comprueba que es la persona correcta (su nombre en Moodle no es idéntico):', r.parciales);
     } catch (e) {
       salida.innerHTML = `<div style="color:var(--danger)">${esc(e.message)}</div>`;
     }
@@ -2891,7 +2892,7 @@
     }
   }
 
-  const ARCHIVOS_EXTENSION = ['manifest.json', 'puente.js', 'popup.html', 'popup.js', 'rellenar.js', 'LEEME.txt'];
+  const ARCHIVOS_EXTENSION = ['manifest.json', 'fondo.js', 'puente.js', 'popup.html', 'popup.js', 'rellenar.js', 'LEEME.txt'];
 
   async function descargarExtension(btn) {
     btn.disabled = true;

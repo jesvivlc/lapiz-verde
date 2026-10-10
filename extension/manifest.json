@@ -3,13 +3,35 @@
   "name": "Pasar notas",
   "version": "1.0.0",
   "description": "Rellena las notas de tu cuaderno en la página de calificaciones que tengas abierta. Tú revisas y guardas.",
-  "permissions": ["storage", "activeTab", "scripting"],
-  "action": { "default_popup": "popup.html", "default_title": "Pasar notas" },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "alarms"
+  ],
+  "background": {
+    "service_worker": "fondo.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Pasar notas"
+  },
   "content_scripts": [
     {
-      "matches": ["https://lapizverde.com/*", "https://www.lapizverde.com/*"],
-      "js": ["puente.js"],
-      "run_at": "document_idle"
+      "matches": [
+        "https://lapizverde.com/*",
+        "https://www.lapizverde.com/*"
+      ],
+      "js": [
+        "puente.js"
+      ],
+      "run_at": "document_idle",
+      "exclude_matches": [
+        "https://lapizverde.com/entregar*",
+        "https://www.lapizverde.com/entregar*",
+        "https://lapizverde.com/privacidad*",
+        "https://www.lapizverde.com/privacidad*"
+      ]
     }
   ]
 }

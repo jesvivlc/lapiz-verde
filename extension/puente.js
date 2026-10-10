@@ -3,6 +3,7 @@
 // No envía nada a ningún sitio.
 (() => {
   const ORIGEN = location.origin;
+  const CADUCAN_MS = 12 * 60 * 60 * 1000;
   const avisar = (tipo, extra = {}) => window.postMessage({ tipo, ...extra }, ORIGEN);
 
   const texto = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
@@ -23,7 +24,7 @@
   window.addEventListener('message', async (ev) => {
     if (ev.source !== window || ev.origin !== ORIGEN) return;
     const m = ev.data;
-    if (m?.tipo === 'lapiz-verde/hola') return avisar('lapiz-verde/extension');
+    if (m?.tipo === 'lapiz-verde/hola') return avisar('lapiz-verde/extension', { version: chrome.runtime.getManifest().version });
     if (m?.tipo !== 'lapiz-verde/notas') return;
     const datos = limpiar(m.datos);
     if (!datos) return avisar('lapiz-verde/notas-error');
@@ -31,5 +32,10 @@
     avisar('lapiz-verde/notas-recibidas', { alumnos: datos.alumnos.length });
   });
 
-  avisar('lapiz-verde/extension');
+  /* Por si el navegador estuvo cerrado cuando tocaba borrarlas */
+  chrome.storage.local.get('notas').then(({ notas }) => {
+    if (notas && Date.now() - notas.creado > CADUCAN_MS) chrome.storage.local.remove('notas');
+  });
+
+  avisar('lapiz-verde/extension', { version: chrome.runtime.getManifest().version });
 })();

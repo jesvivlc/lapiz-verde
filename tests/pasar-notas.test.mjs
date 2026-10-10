@@ -71,6 +71,19 @@ ok(emparejar('Ana López', [{ nombre: 'Ana', apellidos: 'López García' }, { no
 const gemelos = [{ nombre: 'Ana', apellidos: 'López' }, { nombre: 'Ana', apellidos: 'López' }];
 ok(emparejar('Ana López', gemelos)?.ambiguo === true, 'dos alumnos con el mismo nombre → ambiguo, no se rellena');
 
+console.log('== Nombres parecidos y correo ==');
+const cab = 'Identificador,Nombre completo,Dirección de correo,Calificación,Calificación máxima\n';
+const soloAna = [{ nombre: 'Ana', apellidos: 'López García', email: '', nota: 8 }];
+r = rellenarHojaMoodle(cab + 'Participante 1,Ana López Pérez,,,10\nParticipante 2,Ana López García,,,10\n', soloAna);
+h = leerCsv(r.csv);
+ok(h.filas[2][3] === '8.00' && h.filas[1][3] === '' && r.ambiguos.join() === 'Ana López Pérez', 'una tocaya (mismo nombre y primer apellido) no se lleva la nota de la verdadera');
+r = rellenarHojaMoodle(cab + 'Participante 1,Ana López,,,10\nParticipante 2,Ana López,,,10\n', soloAna);
+ok(r.rellenadas === 0 && r.ambiguos.length === 2, 'dos filas igual de dudosas para la misma alumna → ninguna');
+r = rellenarHojaMoodle(cab + 'Participante 1,Ana López Pérez,,,10\n', soloAna);
+ok(r.rellenadas === 1 && r.parciales.join() === 'Ana López Pérez', 'si solo está la parecida, se pone pero se avisa para comprobarla');
+r = rellenarHojaMoodle(cab + 'Participante 1,Ana López García,otra@x.es,,10\n', [{ ...soloAna[0], email: 'ana@x.es' }]);
+ok(r.rellenadas === 0 && r.noEncontrados.length === 1, 'mismo nombre pero otro correo → es otra persona');
+
 console.log('== Comentario y copiar ==');
 const t = textoComentario({ comentario_ia: 'Bien', mejoras_ia: 'uno\ndos', mensaje_motivador: '¡Ánimo!' }, 'Bruno');
 ok(t === 'Bien\n\nPara mejorar:\n1. uno\n2. dos\n\n¡Ánimo!\n\nBruno', 'compone el comentario como el feedback');
@@ -78,6 +91,7 @@ ok(textoComentario({ nota: 5 }) === '', 'nota manual sin comentario → vacío')
 ok(tablaParaCopiar(notas.slice(0, 3)) === 'López García, Ana\t7,5\nPérez, Luis\t4\nRuiz, Marta\t', 'tabla para pegar con coma decimal');
 ok(tablaParaCopiar([notas[0]], { conComentario: true }).split('\t')[2] === 'Buen trabajo. Para mejorar: 1. Ortografía 2. Orden', 'comentario en una línea al copiar');
 ok(comentarioHtml('a\nb') === '<p>a<br>b</p>', 'saltos de línea simples → <br>');
+ok(tablaParaCopiar([{ nombre: 'X', apellidos: '=HYPERLINK("http://x")', nota: 5, comentario: '+SUMA(A1)' }], { conComentario: true }) === `'=HYPERLINK("http://x"), X\t5\t'+SUMA(A1)`, 'al copiar, lo que parece fórmula se neutraliza');
 
 console.log(fallos ? `\n${fallos} FALLOS` : '\nTodo correcto');
 process.exit(fallos ? 1 : 0);

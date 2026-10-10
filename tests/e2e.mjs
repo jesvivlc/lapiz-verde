@@ -436,7 +436,7 @@ console.log('== Pasar notas: hoja de Moodle, extensión y copiar ==');
   const { page, ctx, errores } = await prepararPagina(browser, { conSesion: true });
   await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://app.test' });
   // La extensión en la página: su puente con un chrome.storage de mentira
-  await page.evaluate(() => { window.__guardado = null; window.chrome = { storage: { local: { set: async (o) => { window.__guardado = o; } } } }; });
+  await page.evaluate(() => { window.__guardado = null; window.chrome = { runtime: { getManifest: () => ({ version: '1.0.0' }) }, storage: { local: { get: async () => ({}), remove: async () => {}, set: async (o) => { window.__guardado = o; } } } }; });
   await page.addScriptTag({ path: REPO + 'extension/puente.js' });
   await page.waitForSelector('#app:not(.hidden)');
   await page.click('.tab-btn[data-tab="cuaderno"]');
@@ -492,9 +492,12 @@ console.log('== Pasar notas: hoja de Moodle, extensión y copiar ==');
   const de = await descargaExt;
   const zipExt = await JSZip.loadAsync(fs.readFileSync(await de.path()));
   const enZip = Object.keys(zipExt.files).filter(f => !zipExt.files[f].dir).sort();
-  ok(de.suggestedFilename() === 'pasar-notas.zip' && enZip.join() === ['LEEME.txt', 'manifest.json', 'popup.html', 'popup.js', 'puente.js', 'rellenar.js'].map(f => 'pasar-notas/' + f).sort().join(), 'descarga la extensión completa en un ZIP');
+  ok(de.suggestedFilename() === 'pasar-notas.zip' && enZip.join() === ['LEEME.txt', 'fondo.js', 'manifest.json', 'popup.html', 'popup.js', 'puente.js', 'rellenar.js'].map(f => 'pasar-notas/' + f).sort().join(), 'descarga la extensión completa en un ZIP');
   const manifest = JSON.parse(await zipExt.file('pasar-notas/manifest.json').async('string'));
-  ok(manifest.manifest_version === 3 && !manifest.host_permissions && manifest.permissions.join() === 'storage,activeTab,scripting', 'la extensión no pide acceso a todas las webs');
+  ok(manifest.manifest_version === 3 && !manifest.host_permissions && manifest.permissions.join() === 'storage,activeTab,scripting,alarms', 'la extensión no pide acceso a todas las webs');
+  ok(manifest.content_scripts[0].exclude_matches.some(m => m.includes('entregar')), 'el puente no se carga en la página pública de los alumnos');
+  const enManifest = [manifest.background.service_worker, manifest.action.default_popup, ...manifest.content_scripts[0].js];
+  ok(enManifest.every(f => enZip.includes('pasar-notas/' + f)), 'el ZIP lleva todos los archivos que pide el manifest');
   await page.screenshot({ path: OUT + '14-pasar-notas.png', fullPage: true });
   ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
 }
@@ -572,6 +575,15 @@ console.log('== Extensión: rellenar páginas de calificaciones ==');
   // Seguridad: una casilla que no está en la fila de un único alumno no se toca
   r = await rellenar(`<div>Ana López García · Luis Pérez · Marta Ruiz <input type="text" id="global"></div>`, {});
   ok((await valores()).join() === '' && r.hechos.length === 0, 'una casilla común a varios alumnos no se rellena');
+  r = await rellenar(`<table><tbody>
+      <tr><td>Pedro Gil</td><td><input type="text" id="pedro"></td></tr>
+      <tr><td>Luis Pérez</td><td><input type="text" id="luis"></td></tr>
+      <tr><td>Carmen Sanz</td><td><input type="text" id="carmen"></td></tr></tbody></table>`, {});
+  ok((await valores()).join('|') === '|4.6|', 'en una tabla con alumnos ajenos solo se rellena la fila del nuestro');
+  r = await rellenar(`<div><div>Luis Pérez</div><div><input type="text" id="a"></div><div><input type="text" id="b"></div></div>`, {});
+  ok((await valores()).join('|') === '|', 'sin filas claras, un bloque con dos casillas no se rellena');
+  r = await rellenar(`<table><tr><td>Ana López Pérez</td><td><input type="text"></td></tr><tr><td>Ana López García</td><td><input type="text"></td></tr></table>`, {});
+  ok((await valores()).join('|') === '6|9.2', 'Ana López García recibe su nota en su fila; la otra fila es de Ana López (que también está en el cuaderno)');
   r = await rellenar(`<table><tr><td>Pedro Gil</td><td><input type="text"></td></tr></table>`, {});
   ok(r.hechos.length === 0, 'una página sin nuestros alumnos no se toca');
   await page.close();

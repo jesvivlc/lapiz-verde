@@ -19,15 +19,16 @@
   function quien(texto, alumnos) {
     const enTexto = new Set(palabras(texto));
     let cand = alumnos.filter((a) => nombraA(enTexto, a));
-    if (cand.length <= 1) return cand.length ? { alumno: cand[0] } : null;
     const pal = (a) => palabras(`${a.nombre} ${a.apellidos}`);
+    if (cand.length <= 1) return cand.length ? { alumno: cand[0], parcial: !pal(cand[0]).every((p) => enTexto.has(p)) } : null;
     /* Quien sale con todas sus palabras gana a quien solo coincide en nombre y primer apellido */
     const completos = cand.filter((a) => pal(a).every((p) => enTexto.has(p)));
     if (completos.length) cand = completos;
-    if (cand.length === 1) return { alumno: cand[0] };
+    const parcial = (a) => !pal(a).every((p) => enTexto.has(p));
+    if (cand.length === 1) return { alumno: cand[0], parcial: parcial(cand[0]) };
     const contenido = (a, b) => pal(a).every((p) => pal(b).includes(p)) && pal(a).length < pal(b).length;
     const finales = cand.filter((a) => !cand.some((b) => b !== a && contenido(a, b)));
-    return finales.length === 1 ? { alumno: finales[0] } : { ambiguo: true };
+    return finales.length === 1 ? { alumno: finales[0], parcial: parcial(finales[0]) } : { ambiguo: true };
   }
 
   /* ── Campos ── */
@@ -53,12 +54,19 @@
     return trozos.join(' ');
   }
 
-  /* La fila del alumno: el antepasado más cercano del campo que nombra a algún alumno */
-  function filaDe(campo, alumnos) {
+  /* La fila del alumno: el antepasado más cercano del campo que nombra a algún alumno,
+     sin salir de su fila. Si la página tiene filas (tabla, lista), no se pasa de la del
+     campo; si no, no se sube a un bloque que contenga otra casilla de nota. Así la casilla
+     de un alumno ajeno nunca toma el nombre de la fila de al lado. */
+  const FILA = 'tr, [role=row], [role=listitem], li';
+  function filaDe(campo, alumnos, campos) {
+    const tope = campo.closest(FILA);
     let el = campo.parentElement;
     for (let i = 0; el && el !== document.body && i < 12; i++, el = el.parentElement) {
+      if (!tope && campos.some((c) => c !== campo && el.contains(c))) return null;
       const r = quien(textoDe(el), alumnos);
       if (r) return { ...r, fila: el };
+      if (el === tope) return null;
     }
     return null;
   }
@@ -113,25 +121,42 @@
 
   globalThis.__pasarNotas = function (datos, op = {}) {
     const alumnos = datos.alumnos.map((a, i) => ({ ...a, i }));
-    const hechos = new Set(), incompatibles = new Set();
+    const hechos = new Set(), incompatibles = new Set(), parciales = new Set();
     let ambiguos = 0;
     let comentarios = 0;
-    for (const campo of camposNota()) {
-      const r = filaDe(campo, alumnos);
-      if (!r) continue;
-      if (r.ambiguo) { ambiguos++; continue; }
+    /* Primera pasada: la fila de cada casilla. Un alumno que sale en dos filas distintas
+       (dos «Ana López…») es dudoso y no se rellena en ninguna */
+    const campos = camposNota();
+    const asignados = campos.map((campo) => ({ campo, r: filaDe(campo, alumnos, campos) }))
+      .filter(({ r }) => r && (r.ambiguo ? (ambiguos++, false) : true));
+    /* Si una de esas filas lleva su nombre completo y las demás no, vale esa */
+    const filasDe = new Map();
+    for (const { r } of asignados) {
+      if (!filasDe.has(r.alumno.i)) filasDe.set(r.alumno.i, new Map());
+      const f = filasDe.get(r.alumno.i);
+      f.set(r.fila, (f.get(r.fila) ?? true) && !r.parcial);
+    }
+    const filaValida = (r) => {
+      const f = filasDe.get(r.alumno.i);
+      if (f.size === 1) return true;
+      const completas = [...f].filter(([, completa]) => completa);
+      return completas.length === 1 && completas[0][0] === r.fila;
+    };
+    for (const { campo, r } of asignados) {
       const a = r.alumno;
+      if (!filaValida(r)) { ambiguos++; continue; }
       if (hechos.has(a.i) || a.nota == null) continue;
       const valor = valorPara(campo, a.nota, op);
       if (valor == null) { incompatibles.add(a.i); continue; }
       poner(campo, valor);
       hechos.add(a.i);
+      if (r.parcial) parciales.add(a.i);
       incompatibles.delete(a.i);
       if (op.comentarios && a.comentario) {
         const areas = [...r.fila.querySelectorAll('textarea')].filter(usable);
         if (areas.length === 1) { poner(areas[0], a.comentario); comentarios++; }
       }
     }
-    return { hechos: [...hechos], ambiguos, incompatibles: [...incompatibles], comentarios };
+    return { hechos: [...hechos], ambiguos, incompatibles: [...incompatibles], parciales: [...parciales], comentarios };
   };
 })();

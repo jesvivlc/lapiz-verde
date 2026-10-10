@@ -29,6 +29,7 @@ async function cargar() {
   if (!datos) return;
   const conNota = datos.alumnos.filter((a) => a.nota != null).length;
   $('titulo').textContent = datos.titulo || 'Notas';
+  $('version').textContent = 'v' + chrome.runtime.getManifest().version;
   $('resumen').textContent = `${datos.grupo ? datos.grupo + ' · ' : ''}${conNota} alumnos con nota · preparadas ${hace(datos.creado)}`;
 }
 
@@ -38,6 +39,8 @@ async function rellenar() {
   boton.disabled = true;
   res.replaceChildren();
   try {
+    await cargar();   // por si han caducado mientras la ventana estaba abierta
+    if (!datos) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const opciones = { comentarios: $('comentarios').checked, entero: $('entero').checked, coma: $('coma').checked };
     await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, files: ['rellenar.js'] });
@@ -46,18 +49,20 @@ async function rellenar() {
       func: (d, o) => globalThis.__pasarNotas ? globalThis.__pasarNotas(d, o) : null,
       args: [datos, opciones],
     });
-    const hechos = new Set(), incompatibles = new Set();
+    const hechos = new Set(), incompatibles = new Set(), parciales = new Set();
     let comentarios = 0, ambiguos = 0;
     for (const { result: r } of marcos) {
       if (!r) continue;
       r.hechos.forEach((i) => hechos.add(i));
       r.incompatibles.forEach((i) => incompatibles.add(i));
+      (r.parciales || []).forEach((i) => parciales.add(i));
       comentarios += r.comentarios;
       ambiguos += r.ambiguos;
     }
     const nombre = (a) => [a.nombre, a.apellidos].filter(Boolean).join(' ');
     const conNota = datos.alumnos.map((a, i) => ({ a, i })).filter(({ a }) => a.nota != null);
     const faltan = conNota.filter(({ i }) => !hechos.has(i) && !incompatibles.has(i)).map(({ a }) => nombre(a));
+    const parecidos = [...parciales].map((i) => nombre(datos.alumnos[i]));
     const raras = conNota.filter(({ i }) => !hechos.has(i) && incompatibles.has(i)).map(({ a }) => nombre(a));
 
     const ok = document.createElement('p');
@@ -73,6 +78,7 @@ async function rellenar() {
     if (hechos.size) {
       res.append(...(lista('No los he encontrado en esta página:', faltan, 'aviso') || []));
       res.append(...(lista('La casilla no admite su nota (ponla a mano):', raras, 'aviso') || []));
+      res.append(...(lista('Comprueba que es la persona correcta (en la página su nombre no es idéntico):', parecidos, 'aviso') || []));
       if (ambiguos) {
         const p = document.createElement('p');
         p.className = 'muted';
