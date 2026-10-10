@@ -9,6 +9,8 @@ lapiz-verde/
 ├── index.html            ← frontend completo (en la raíz, NO mover)
 ├── entregar.html         ← página pública del alumno (enlace de entrega, sin cuenta)
 ├── privacidad.html       ← privacidad y aviso legal (borrador con [HUECOS])
+├── pasar-notas.js        ← hoja de calificaciones de Moodle y copiar/pegar (lo usa index.html; se prueba en Node)
+├── extension/            ← extensión de Chrome «Pasar notas» (la app la descarga como ZIP)
 ├── api/                  ← funciones de Vercel: corregir, corregir-entregas, entrega (pública), correo-entrante,
 │                           cron-nocturno, rubrica, checkout, stripe-webhook, enviar-feedback
 ├── lib/                  ← servidor.js (Supabase, sesión, errores), correccion.js (IA), entregas.js (almacén)
@@ -53,6 +55,7 @@ lapiz-verde/
 - La URL y la clave anónima de Supabase van en el JS del index.html (es pública por diseño; la seguridad la da la RLS). La clave service_role solo en variables de Vercel
 - Cualquier cambio de esquema: nueva migración numerada en supabase/migrations/, idempotente, y ampliar supabase/tests/rls.test.mjs
 - Pasar `npm test` antes de hacer commit
+- El profe usa la app sin decirlo en su centro: ninguna integración que pida permiso al centro o deje rastro en su plataforma (ver ROADMAP, «Regla de integraciones»). La IA nunca recibe el nombre del alumno
 - Siempre hacer git add + commit + push al terminar. Push a `main` publica en producción: para cambios grandes, trabajar en rama y que Bruno fusione
 
 ## Próximos pasos

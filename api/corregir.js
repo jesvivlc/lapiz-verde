@@ -12,7 +12,7 @@ import {
 const client = new Anthropic();
 
 // Límites para que una sola corrección no cueste mucho más de lo que se cobra
-const LIMITES = { nombre_alumno: 120, nombre_tarea: 200, rubrica: 6000, texto_tarea: 40000 };
+const LIMITES = { nombre_tarea: 200, rubrica: 6000, texto_tarea: 40000 };
 
 /** Bloques del trabajo a partir del cuerpo: `archivos` (varios), `archivo_base64` (uno) o `texto_tarea` */
 function trabajoDelCuerpo(body) {
@@ -47,9 +47,9 @@ export default async function handler(req, res) {
     user = await usuarioDeLaPeticion(req);
 
     const body = req.body ?? {};
-    const { nombre_alumno, curso, nombre_tarea, rubrica } = body;
+    const { curso, nombre_tarea, rubrica } = body;   // sin nombre del alumno: la IA no lo necesita
 
-    const camposFaltantes = ['nombre_alumno', 'curso', 'nombre_tarea', 'rubrica']
+    const camposFaltantes = ['curso', 'nombre_tarea', 'rubrica']
       .filter((campo) => !body[campo] || String(body[campo]).trim() === '');
     if (camposFaltantes.length > 0) {
       throw new ErrorHttp(400, `Faltan campos obligatorios: ${camposFaltantes.join(', ')}`);
@@ -68,7 +68,7 @@ export default async function handler(req, res) {
     creditoConsumido = true;
 
     const response = await client.messages.create(
-      peticionCorreccion({ nombre_alumno, curso, nombre_tarea, rubrica, trabajo }));
+      peticionCorreccion({ curso, nombre_tarea, rubrica, trabajo }));
     await registrarUso(user.id, 'correccion', MODELO, response.usage, true);
     if (['refusal', 'max_tokens'].includes(response.stop_reason)) creditoConsumido = false;   // la IA trabajó: no se devuelve
     const resultado = leerCorreccion(response);

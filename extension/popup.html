@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Pasar notas</title>
+  <style>
+    body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; color: #0F172A; margin: 0; width: 320px; background: #fff; }
+    main { padding: 14px 16px 16px; }
+    h1 { font-size: 16px; margin: 0 0 4px; }
+    p { margin: 6px 0; }
+    .muted { color: #64748B; font-size: 13px; }
+    label { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; font-size: 13px; }
+    button { font: inherit; border: 0; border-radius: 8px; padding: 9px 12px; cursor: pointer; width: 100%; margin-top: 8px; }
+    .pri { background: #15803D; color: #fff; font-weight: 600; }
+    .sec { background: #F1F5F9; color: #0F172A; }
+    .ok { color: #15803D; font-weight: 600; }
+    .aviso { color: #B45309; }
+    ul { margin: 4px 0; padding-left: 18px; font-size: 13px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Pasar notas <span class="muted" id="version"></span></h1>
+  <div id="vacio" class="hidden">
+    <p>No hay notas preparadas.</p>
+    <p class="muted">En tu cuaderno, abre el grupo → «📤 Pasar notas» → «Enviar a la extensión». Después vuelve a la página donde quieras ponerlas y pulsa aquí.</p>
+  </div>
+  <div id="lleno" class="hidden">
+    <p><strong id="titulo"></strong><br><span class="muted" id="resumen"></span></p>
+    <label><input type="checkbox" id="comentarios" checked> Poner también el comentario (donde haya un recuadro en la fila del alumno)</label>
+    <label><input type="checkbox" id="entero"> Redondear a número entero (sin aprobar a nadie por redondeo)</label>
+    <label><input type="checkbox" id="coma" checked> Decimales con coma (7,5)</label>
+    <button class="pri" id="rellenar">Rellenar esta página</button>
+    <div id="resultado"></div>
+    <p class="muted">Solo rellena: revisa y pulsa tú «Guardar» en la página.</p>
+    <button class="sec" id="borrar">Borrar estas notas de la extensión</button>
+  </div>
+</main>
+<script src="popup.js"></script>
+</body>
+</html>

@@ -92,7 +92,11 @@ La clave: **las plataformas ya dejan las entregas en carpetas con el nombre del 
 | ⬜ | Peldaño C: carpeta sincronizada leída desde el navegador (File System Access API) | Ninguno |
 | ⬜ | Peldaño B: OAuth de ficheros (no de tareas educativas) | Consentimiento de usuario |
 | 🔧 | Corrección nocturna con Batch API (-50%) para tareas con «Corregir sola por la noche»; limpieza de archivos (al aprobar, o a los 60 días) | Variable `CRON_SECRET` |
-| ⬜ | Exportar notas: CSV para ITACA y hoja de calificación externa de Moodle | Ninguno |
+| 🔧 | **Modo anónimo**: la IA nunca recibe el nombre del alumno (ni en la corrección directa, ni en las entregas, ni en el lote nocturno) | Ninguno |
+| 🔧 | **Pasar notas** desde el cuaderno (una tarea con su comentario, la media de una evaluación o la media total): hoja de calificaciones de Moodle rellena (Aules, EducamosCLM, Moodle Centros…), extensión de Chrome o copiar y pegar | Ninguno |
+| 🔧 | **Extensión «Pasar notas»** (`extension/`): rellena la página de calificaciones abierta (Classroom, Aules, ITACA, Séneca…) en la sesión del profe; nunca guarda por él. Se descarga desde la app y se instala «descomprimida» | Ninguno. Más adelante: publicarla en la Chrome Web Store |
+
+**Regla de integraciones** (Bruno, oct. 2026): el profe usa Lápiz Verde por su cuenta, sin decirlo en el centro. Nada que pida permiso al centro o deje rastro en su plataforma: ni API de Google/Microsoft con consentimiento de administrador, ni complementos de Classroom, ni LTI, ni importación de XML por secretaría, ni acuerdos con Educamos/Alexia. Solo ficheros que el profe descarga y sube, y la extensión en su propio navegador.
 
 **Verificar antes de construir** (Bruno):
 - ¿Permiten los dominios de los centros compartir carpetas con cuentas externas?

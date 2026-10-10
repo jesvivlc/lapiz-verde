@@ -8,7 +8,7 @@ import {
 import {
   CURSOS_VALIDOS, FALLOS_COBRADOS, MODELO, cobrarCredito, devolverCredito, leerCorreccion, peticionCorreccion, responderErrorIA,
 } from '../lib/correccion.js';
-import { archivosDelAlumno, guardarCorreccion, marcarError, nombreCompleto, trabajoDeArchivos } from '../lib/entregas.js';
+import { archivosDelAlumno, guardarCorreccion, marcarError, trabajoDeArchivos } from '../lib/entregas.js';
 
 const client = new Anthropic();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     if (errTarea) throw errTarea;
     if (!tarea) throw new ErrorHttp(404, 'Tarea no encontrada.');
     const { data: alumno, error: errAlumno } = await sbAdmin().from('alumnos')
-      .select('id,nombre,apellidos').eq('id', alumno_id).eq('owner_id', user.id).eq('grupo_id', tarea.grupo_id).maybeSingle();
+      .select('id').eq('id', alumno_id).eq('owner_id', user.id).eq('grupo_id', tarea.grupo_id).maybeSingle();
     if (errAlumno) throw errAlumno;
     if (!alumno) throw new ErrorHttp(404, 'Alumno no encontrado en el grupo de la tarea.');
 
@@ -52,7 +52,7 @@ export default async function handler(req, res) {
     creditoConsumido = true;
 
     const response = await client.messages.create(peticionCorreccion({
-      nombre_alumno: nombreCompleto(alumno), curso, nombre_tarea: tarea.titulo, rubrica: String(rubrica), trabajo,
+      curso, nombre_tarea: tarea.titulo, rubrica: String(rubrica), trabajo,
     }));
     await registrarUso(user.id, 'correccion', MODELO, response.usage, true);
     if (['refusal', 'max_tokens'].includes(response.stop_reason)) creditoConsumido = false;   // la IA trabajó: no se devuelve

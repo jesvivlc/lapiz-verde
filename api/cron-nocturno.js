@@ -9,7 +9,7 @@ import { ErrorHttp, registrarUso, responderError, sbAdmin } from '../lib/servido
 import {
   CURSOS_VALIDOS, FALLOS_COBRADOS, MODELO, cobrarCredito, devolverCredito, leerCorreccion, peticionCorreccion,
 } from '../lib/correccion.js';
-import { archivosDelAlumno, guardarCorreccion, marcarError, nombreCompleto, trabajoDeArchivos } from '../lib/entregas.js';
+import { archivosDelAlumno, guardarCorreccion, marcarError, trabajoDeArchivos } from '../lib/entregas.js';
 
 const client = new Anthropic();
 const MAX_ALUMNOS_POR_NOCHE = 200;
@@ -41,7 +41,7 @@ async function enviar() {
 
   const [{ data: grupos }, { data: alumnos }] = await Promise.all([
     sbAdmin().from('grupos').select('id,nivel').in('id', [...new Set(tareas.map((t) => t.grupo_id))]),
-    sbAdmin().from('alumnos').select('id,nombre,apellidos').in('id', [...new Set(pares.map((p) => p.alumno_id))]),
+    sbAdmin().from('alumnos').select('id').in('id', [...new Set(pares.map((p) => p.alumno_id))]),
   ]);
 
   const peticiones = [];
@@ -79,7 +79,7 @@ async function enviar() {
       cobradas.push({ clave, owner: tarea.owner_id, ids });
       peticiones.push({
         custom_id: clave,
-        params: peticionCorreccion({ nombre_alumno: nombreCompleto(alumno), curso, nombre_tarea: tarea.titulo, rubrica: tarea.rubrica, trabajo }),
+        params: peticionCorreccion({ curso, nombre_tarea: tarea.titulo, rubrica: tarea.rubrica, trabajo }),
       });
       bytes += trabajo.bytes;
     }

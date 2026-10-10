@@ -15,14 +15,15 @@ const ok = (c, m) => { console.log((c ? '  OK  ' : '  FAIL') + ' ' + m); if (!c)
 const pdf = Buffer.from('%PDF-1.4 falso');
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 const teams = new JSZip();
-teams.file('Comentario tema 3/Ana López García/Versión 1/trabajo.pdf', pdf);
-teams.file('Comentario tema 3/Ana López García/Versión 2/trabajo.pdf', pdf);
+const pdfDe = (quien) => Buffer.from('%PDF-1.4 ' + quien);   // el contenido dice de quién es (la petición ya no lleva el nombre)
+teams.file('Comentario tema 3/Ana López García/Versión 1/trabajo.pdf', pdfDe('Ana'));
+teams.file('Comentario tema 3/Ana López García/Versión 2/trabajo.pdf', pdfDe('Ana'));
 teams.file('Comentario tema 3/Luis Pérez/foto.png', png);
-teams.file('Comentario tema 3/Marta Ruiz/foto.jpg', png);
+teams.file('Comentario tema 3/Marta Ruiz/trabajo.pdf', pdfDe('Marta'));
 teams.file('Otra tarea/Sara Gil/x.pdf', pdf);
 fs.writeFileSync(OUT + 'teams.zip', await teams.generateAsync({ type: 'nodebuffer' }));
 const moodle = new JSZip();
-moodle.file('Ana López_1234_assignsubmission_file_/redaccion.pdf', pdf);
+moodle.file('Ana López_1234_assignsubmission_file_/redaccion.pdf', pdfDe('Ana'));
 fs.writeFileSync(OUT + 'moodle.zip', await moodle.generateAsync({ type: 'nodebuffer' }));
 
 // ── Datos simulados ──
@@ -41,6 +42,8 @@ const db = {
 db.entregas = [];
 const upserts = [], correcciones = [], patches = [], borrados = [], llamadasEntregas = [], subidas = [];
 let creditosApi = 18;
+// De quién es una corrección, por el contenido del primer archivo (Ana y Marta mandan PDF; Luis, foto)
+const quien = (b) => { const t = Buffer.from(b.archivos?.[0]?.base64 ?? '', 'base64').toString('latin1'); return t.includes('Marta') ? 'Marta' : t.includes('Ana') ? 'Ana' : 'Luis'; };
 
 async function prepararRuta(route) {
   const req = route.request(); const url = new URL(req.url());
@@ -48,6 +51,11 @@ async function prepararRuta(route) {
   if (url.host === 'app.test') {
     if (url.pathname === '/' || url.pathname === '/index.html') return route.fulfill({ contentType: 'text/html', body: fs.readFileSync(REPO + 'index.html') });
     if (url.pathname === '/entregar.html') return route.fulfill({ contentType: 'text/html', body: fs.readFileSync(REPO + 'entregar.html') });
+    if (url.pathname === '/pasar-notas.js' || /^\/extension\/[\w.-]+$/.test(url.pathname)) {
+      const f = REPO + url.pathname.slice(1);
+      if (!fs.existsSync(f)) return route.fulfill({ status: 404, body: '' });
+      return route.fulfill({ contentType: f.endsWith('.js') ? 'text/javascript' : f.endsWith('.json') ? 'application/json' : 'text/plain', body: fs.readFileSync(f) });
+    }
     if (url.pathname === '/api/entrega') {
       const b = req.postDataJSON(); llamadasEntregas.push(b);
       if (b.t !== 'T'.repeat(32)) return json({ error: 'Este enlace no es válido.' }, 404);
@@ -66,8 +74,8 @@ async function prepararRuta(route) {
       const b = req.postDataJSON(); correcciones.push(b);
       if (creditosApi <= 0) return json({ error: 'No te quedan correcciones.', codigo: 'SIN_CREDITOS' }, 402);
       creditosApi--;
-      const legible = !b.nombre_alumno.startsWith('Marta');
-      return json({ nota: legible ? 7.5 : 3, nota_texto: legible ? 'Notable' : 'Insuficiente', comentario: `Comentario para ${b.nombre_alumno}`, propuestas_mejora: ['uno', 'dos', 'tres'], mensaje_motivador: '¡Sigue así!', legible, creditos_restantes: creditosApi });
+      const legible = quien(b) !== 'Marta';
+      return json({ nota: legible ? 7.5 : 3, nota_texto: legible ? 'Notable' : 'Insuficiente', comentario: `Comentario para ${quien(b)}`, propuestas_mejora: ['uno', 'dos', 'tres'], mensaje_motivador: '¡Sigue así!', legible, creditos_restantes: creditosApi });
     }
     if (url.pathname === '/api/rubrica') return json({ rubrica: '- Propuesta IA (10 pts)' });
     return route.fulfill({ status: 404, body: '' });
@@ -175,10 +183,11 @@ console.log('== Con sesión: corregir con grupo del cuaderno (ZIP de Teams) ==')
   await page.waitForSelector('#btnCorregir:not([disabled])', { timeout: 20000 });
   await page.waitForTimeout(300);
 
-  ok(correcciones.length === 3, `3 correcciones enviadas (Sara es de otra tarea): ${correcciones.map(c => c.nombre_alumno).join(', ')}`);
-  const ana = correcciones.find(c => c.nombre_alumno.startsWith('Ana'));
+  ok(correcciones.length === 3, `3 correcciones enviadas (Sara es de otra tarea): ${correcciones.map(quien).join(', ')}`);
+  ok(correcciones.every(c => !('nombre_alumno' in c) && !JSON.stringify(c).includes('López')), 'modo anónimo: ninguna petición lleva el nombre del alumno');
+  const ana = correcciones.find(c => quien(c) === 'Ana');
   ok(ana?.archivos?.length === 1 && ana.archivos[0].tipo === 'pdf', 'de Ana solo va su última versión, como pdf');
-  const luis = correcciones.find(c => c.nombre_alumno.startsWith('Luis'));
+  const luis = correcciones.find(c => quien(c) === 'Luis');
   ok(luis?.archivos?.[0]?.tipo === 'jpeg', 'imagen de Luis convertida y enviada como jpeg (antes fallaba)');
   ok(await page.textContent('#creditosChip') === '15 correcciones', 'los créditos bajan a 15');
   const primera = await page.$eval('#cardsGrid .student-card', el => el.textContent);
@@ -228,7 +237,7 @@ console.log('== ZIP de Moodle/Aules + Excel, y quedarse sin créditos ==');
   await page.setInputFiles('#zipFile', OUT + 'moodle.zip');
   await page.click('#btnCorregir');
   await page.waitForSelector('#modal:not(.hidden)', { timeout: 20000 });
-  ok(correcciones.length === 1 && correcciones[0].nombre_alumno === 'Ana López', 'encuentra a Ana en el ZIP de Moodle (sin nombre de tarea en la ruta)');
+  ok(correcciones.length === 1 && quien(correcciones[0]) === 'Ana', 'encuentra a Ana en el ZIP de Moodle (sin nombre de tarea en la ruta)');
   ok((await page.textContent('#modalContenido')).includes('9 €'), 'sin créditos → abre la compra de bonos');
   await page.screenshot({ path: OUT + '4-sin-creditos.png', fullPage: true });
   await page.click('text=Cerrar');
@@ -352,10 +361,10 @@ console.log('== Escaneo de libretas con pegatinas QR ==');
   page.once('dialog', d => d.accept());
   await page.click('#btnCorregir');
   await page.waitForFunction(() => document.getElementById('progressText').textContent.includes('completada'), null, { timeout: 60000 });
-  const porNombre = Object.fromEntries(correcciones.map(c => [c.nombre_alumno.split(' ')[0], c]));
-  ok(porNombre.Ana?.archivos?.length === 2 && porNombre.Ana.archivos.every(a => a.tipo === 'jpeg'), 'Ana: su pegatina y la página siguiente, 2 páginas en una sola corrección');
-  ok(porNombre.Marta?.archivos?.length === 1, 'Marta: 1 página');
-  ok(correcciones.length === 2, `no se corrige a nadie más (${correcciones.map(c => c.nombre_alumno).join(', ')})`);
+  const corregidos = await page.evaluate(() => cards.filter(c => c.result).map(c => c.alumno.nombre.split(' ')[0]).sort().join(','));
+  const paginas = correcciones.map(c => c.archivos.length).sort().join(',');
+  ok(corregidos === 'Ana,Marta' && correcciones.length === 2, `solo se corrige a Ana y Marta (${corregidos})`);
+  ok(paginas === '1,2' && correcciones.every(c => c.archivos.every(a => a.tipo === 'jpeg')), 'Ana: su pegatina y la página siguiente (2 páginas); Marta: 1 página');
   ok((await page.textContent('#statsBar')).includes('2 sin entrega'), 'Luis y Sara salen como sin entrega');
   await page.screenshot({ path: OUT + '9-escaneo.png', fullPage: true });
   ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
@@ -416,6 +425,174 @@ console.log('== Página del alumno (entregar.html) ==');
   await page.waitForSelector('#fallo:not(.hidden)');
   ok((await page.textContent('#falloTexto')).includes('no es válido'), 'enlace malo → mensaje claro');
   ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
+}
+
+console.log('== Pasar notas: hoja de Moodle, extensión y copiar ==');
+{
+  db.notas = [
+    { alumno_id: 'a-1', tarea_id: 't-1', nota: 9.2, faltas: null, origen: 'markmate', comentario_ia: 'Muy buen <comentario>.', mejoras_ia: 'uno\ndos', mensaje_motivador: '¡Sigue así!' },
+    { alumno_id: 'a-2', tarea_id: 't-1', nota: 4.6, faltas: null, origen: 'manual' },
+  ];
+  const { page, ctx, errores } = await prepararPagina(browser, { conSesion: true });
+  await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://app.test' });
+  // La extensión en la página: su puente con un chrome.storage de mentira
+  await page.evaluate(() => { window.__guardado = null; window.chrome = { runtime: { getManifest: () => ({ version: '1.0.0' }) }, storage: { local: { get: async () => ({}), remove: async () => {}, set: async (o) => { window.__guardado = o; } } } }; });
+  await page.addScriptTag({ path: REPO + 'extension/puente.js' });
+  await page.waitForSelector('#app:not(.hidden)');
+  await page.click('.tab-btn[data-tab="cuaderno"]');
+  await page.waitForSelector('.grupo-card');
+  await page.click('.grupo-card');
+  await page.waitForSelector('.notas-table');
+  await page.click('text=📤 Pasar notas');
+  await page.waitForSelector('#pnQue');
+  ok((await page.$$eval('#pnQue option', o => o.map(x => x.textContent))).join('|') === 'Comentario tema 3|Media de la 1.ª evaluación|Media de todas las tareas', 'elige tarea, media de la evaluación o media total');
+  await page.waitForFunction(() => document.getElementById('pnExtTexto').textContent.includes('está instalada'));
+  ok(true, 'detecta que la extensión está instalada');
+
+  // Hoja de calificaciones de Aules
+  const hoja = '﻿"Identificador","Nombre completo","Dirección de correo","Estado","Calificación","Calificación máxima","Última modificación (calificación)","Comentarios de retroalimentación"\n' +
+    '"Participante 1","Ana López García","ana@x.es","Enviado","","100,00","-",""\n' +
+    '"Participante 2","Luis Pérez","","Enviado","","100,00","-",""\n' +
+    '"Participante 3","Marta Ruiz","","Sin entrega","","100,00","-",""\n' +
+    '"Participante 4","Alguien Nuevo","","Sin entrega","","100,00","-",""\n';
+  const descarga = page.waitForEvent('download');
+  await page.setInputFiles('#pnHoja', { name: 'calificaciones-tarea.csv', mimeType: 'text/csv', buffer: Buffer.from(hoja) });
+  const d = await descarga;
+  const csv = fs.readFileSync(await d.path(), 'utf8');
+  ok(d.suggestedFilename() === 'calificaciones-tarea (rellena).csv', 'descarga la hoja rellena con su nombre');
+  ok(csv.includes('"Participante 1","Ana López García","ana@x.es","Enviado","92,00","100,00","-","<p>Muy buen &lt;comentario&gt;.</p><p>Para mejorar:<br>1. uno<br>2. dos</p><p>¡Sigue así!</p><p>Bruno</p>"'), 'Ana: 9,2 → 92,00 sobre 100, con comentario escapado y firma');
+  ok(csv.includes('"Participante 2","Luis Pérez","","Enviado","46,00"'), 'Luis: nota manual, sin comentario');
+  const resultado = await page.textContent('#pnResultado');
+  ok(resultado.includes('2 notas puestas') && resultado.includes('Marta Ruiz') && resultado.includes('Alguien Nuevo'), 'resume lo puesto, lo que va sin nota y lo que no está');
+
+  await page.setInputFiles('#pnHoja', { name: 'otra.csv', mimeType: 'text/csv', buffer: Buffer.from('Nombre;Nota\nAna;7\n') });
+  await page.waitForFunction(() => document.getElementById('pnResultado').textContent.includes('No parece'));
+  ok(true, 'un CSV que no es de Moodle → explica cómo descargar la hoja');
+
+  // Enviar a la extensión
+  await page.click('text=Enviar a la extensión');
+  await page.waitForFunction(() => window.__guardado);
+  const g = await page.evaluate(() => window.__guardado.notas);
+  ok(g.titulo === 'Comentario tema 3' && g.grupo === '3.º ESO A' && g.alumnos.length === 4, 'la extensión recibe la tarea y los 4 alumnos');
+  ok(g.alumnos[0].nota === 9.2 && g.alumnos[0].comentario.startsWith('Muy buen') && g.alumnos[2].nota === null, 'con nota y comentario; sin nota quien no la tiene');
+  ok(g.alumnos.every(a => !('email' in a) && !('id' in a)), 'a la extensión solo van nombre, nota y comentario');
+  await page.waitForSelector('.toast.show');
+  ok((await page.textContent('#toast')).includes('enviadas a la extensión'), 'confirma el envío');
+
+  // Media de la evaluación y copiar
+  await page.selectOption('#pnQue', 'e:1');
+  await page.click('text=📋 Copiar notas');
+  await page.waitForTimeout(300);
+  const copiado = await page.evaluate(() => navigator.clipboard.readText());
+  ok(copiado.split('\n')[0] === 'López García, Ana\t9,2' && copiado.includes('Pérez, Luis\t4,6') && copiado.includes('Ruiz, Marta\t'), 'copia la media con coma, en columnas');
+
+  // Descargar la extensión
+  const descargaExt = page.waitForEvent('download');
+  await page.click('text=⬇️ Descargar la extensión');
+  const de = await descargaExt;
+  const zipExt = await JSZip.loadAsync(fs.readFileSync(await de.path()));
+  const enZip = Object.keys(zipExt.files).filter(f => !zipExt.files[f].dir).sort();
+  ok(de.suggestedFilename() === 'pasar-notas.zip' && enZip.join() === ['LEEME.txt', 'fondo.js', 'manifest.json', 'popup.html', 'popup.js', 'puente.js', 'rellenar.js'].map(f => 'pasar-notas/' + f).sort().join(), 'descarga la extensión completa en un ZIP');
+  const manifest = JSON.parse(await zipExt.file('pasar-notas/manifest.json').async('string'));
+  ok(manifest.manifest_version === 3 && !manifest.host_permissions && manifest.permissions.join() === 'storage,activeTab,scripting,alarms', 'la extensión no pide acceso a todas las webs');
+  ok(manifest.content_scripts[0].exclude_matches.some(m => m.includes('entregar')), 'el puente no se carga en la página pública de los alumnos');
+  const enManifest = [manifest.background.service_worker, manifest.action.default_popup, ...manifest.content_scripts[0].js];
+  ok(enManifest.every(f => enZip.includes('pasar-notas/' + f)), 'el ZIP lleva todos los archivos que pide el manifest');
+  await page.screenshot({ path: OUT + '14-pasar-notas.png', fullPage: true });
+  ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
+}
+
+console.log('== ZIP descargado de Drive (Classroom) o de OneDrive (Teams) ==');
+{
+  const { page, errores } = await prepararPagina(browser, { conSesion: true });
+  await page.waitForSelector('#app:not(.hidden)');
+  const r = await page.evaluate(() => {
+    const drive = ['Comentario tema 3/Ana López García - Comentario tema 3.pdf', 'Comentario tema 3/IMG_2041.jpg', 'Comentario tema 3/Luis Pérez - foto 1.jpg', 'Comentario tema 3/Luis Pérez - foto 2.jpg'];
+    const onedrive = ['Student Work/Submitted files/López García, Ana/Comentario tema 3/trabajo.pdf', 'Student Work/Submitted files/Pérez, Luis/Comentario tema 3/foto.png'];
+    return {
+      ana: buscarArchivosAlumno(drive, 'Ana López García'), luis: buscarArchivosAlumno(drive, 'Luis Pérez'),
+      anaOne: buscarArchivosAlumno(onedrive, 'Ana López García'), luisOne: buscarArchivosAlumno(onedrive, 'Luis Pérez'),
+    };
+  });
+  ok(r.ana.length === 1 && r.luis.length === 2, 'Drive (Classroom): archivos con el nombre del alumno, incluidas varias fotos');
+  ok(r.anaOne.length === 1 && r.luisOne.length === 1, 'OneDrive (Teams): carpeta «Apellidos, Nombre»');
+  ok(errores.length === 0, 'sin errores de JS');
+}
+
+console.log('== Extensión: rellenar páginas de calificaciones ==');
+{
+  const datos = { alumnos: [
+    { nombre: 'Ana', apellidos: 'López García', nota: 9.2, comentario: 'Muy bien, Ana' },
+    { nombre: 'Luis', apellidos: 'Pérez', nota: 4.6, comentario: 'Repasa' },
+    { nombre: 'Marta', apellidos: 'Ruiz', nota: null, comentario: '' },
+    { nombre: 'Ana', apellidos: 'López', nota: 6, comentario: '' },
+  ] };
+  const page = await browser.newPage();
+  const rellenar = async (html, op) => {
+    await page.setContent(html);
+    await page.addScriptTag({ path: REPO + 'extension/rellenar.js' });
+    return page.evaluate(([d, o]) => globalThis.__pasarNotas(d, o), [datos, op]);
+  };
+  const valores = () => page.$$eval('input:not([type=checkbox]), select, textarea', els => els.map(e => e.value));
+
+  // Aules (Moodle): calificación rápida, sobre 100, con filtro de búsqueda y casilla de comentarios
+  let r = await rellenar(`
+    <form><input type="search" placeholder="Buscar"><select name="perpage"><option>10</option><option>100</option></select>
+    <table><tr><th>Nombre</th><th>Calificación</th><th>Comentarios</th></tr>
+    <tr><td><input type="checkbox"></td><td><a>Ana López García</a><br>ana@x.es</td><td><input type="text" id="quickgrade_11" value=""> / 100,00</td><td><textarea id="quickgrade_comments_11"></textarea></td></tr>
+    <tr><td><input type="checkbox"></td><td><a>Luis Pérez Martín</a></td><td><input type="text" id="quickgrade_12" value=""> / 100,00</td><td><textarea id="quickgrade_comments_12"></textarea></td></tr>
+    <tr><td><input type="checkbox"></td><td><a>Marta Ruiz</a></td><td><input type="text" id="quickgrade_13" value=""> / 100,00</td><td><textarea id="quickgrade_comments_13"></textarea></td></tr>
+    <tr><td><input type="checkbox"></td><td><a>Ana López</a></td><td><input type="text" id="quickgrade_14" value=""> / 100,00</td><td><textarea id="quickgrade_comments_14"></textarea></td></tr>
+    </table></form>`, { comentarios: true, coma: true });
+  let v = await valores();
+  ok(v.join('|') === '|10|92|Muy bien, Ana|46|Repasa|||60|', 'Aules: notas sobre 100 y comentarios en su fila (filtros intactos): ' + v.join('|'));
+  ok(r.hechos.length === 3 && r.comentarios === 2, '3 notas y 2 comentarios; Marta sin nota se queda en blanco');
+  ok(await page.$eval('#quickgrade_11', e => e.style.outline.includes('3px')), 'marca en verde lo que ha rellenado');
+
+  // Classroom: filas hechas con div, nota sobre 10 con decimales y coma; un campo de React
+  r = await rellenar(`
+    <div role="list">
+      <div role="listitem"><div><span>Ana López García</span></div><div><input aria-label="Nota" type="text"><span>/10</span></div></div>
+      <div role="listitem"><div><span>Luis Pérez</span></div><div><input aria-label="Nota" type="text"><span>/10</span></div></div>
+    </div>
+    <script>window.cambios = 0; document.querySelectorAll('input').forEach(i => i.addEventListener('input', () => window.cambios++));</script>`, { coma: true });
+  v = await valores();
+  ok(v.join('|') === '9,2|4,6', 'Classroom: nota con coma en cada fila');
+  ok(await page.evaluate(() => window.cambios) === 2, 'lanza los eventos que esperan las webs modernas');
+
+  // ITACA/Séneca: APELLIDOS, NOMBRE en mayúsculas y desplegables de notas enteras
+  r = await rellenar(`
+    <table>
+      <tr><td>LÓPEZ GARCÍA, ANA</td><td><select><option value="">-</option>${[1,2,3,4,5,6,7,8,9,10].map(n => `<option value="${n}">${n}</option>`).join('')}</select></td></tr>
+      <tr><td>PÉREZ, LUIS</td><td><select><option value="">-</option><option value="IN">Insuficiente</option><option value="SU">Suficiente</option><option value="NT">Notable</option></select></td></tr>
+    </table>`, { entero: true });
+  v = await valores();
+  ok(v.join('|') === '9|IN', 'ITACA: 9,2 → 9 y 4,6 → Insuficiente (nadie aprueba por redondeo)');
+
+  r = await rellenar(`<table><tr><td>Luis Pérez</td><td><input type="text"></td></tr></table>`, { entero: true });
+  ok((await valores()).join() === '4', 'redondear a entero: 4,6 → 4, no 5');
+
+  // Seguridad: una casilla que no está en la fila de un único alumno no se toca
+  r = await rellenar(`<div>Ana López García · Luis Pérez · Marta Ruiz <input type="text" id="global"></div>`, {});
+  ok((await valores()).join() === '' && r.hechos.length === 0, 'una casilla común a varios alumnos no se rellena');
+  r = await rellenar(`<table><tbody>
+      <tr><td>Pedro Gil</td><td><input type="text" id="pedro"></td></tr>
+      <tr><td>Luis Pérez</td><td><input type="text" id="luis"></td></tr>
+      <tr><td>Carmen Sanz</td><td><input type="text" id="carmen"></td></tr></tbody></table>`, {});
+  ok((await valores()).join('|') === '|4.6|', 'en una tabla con alumnos ajenos solo se rellena la fila del nuestro');
+  r = await rellenar(`<div><div>Luis Pérez</div><div><input type="text" id="a"></div><div><input type="text" id="b"></div></div>`, {});
+  ok((await valores()).join('|') === '|', 'sin filas claras, un bloque con dos casillas no se rellena');
+  r = await rellenar(`<table><tr><td>Ana López Pérez</td><td><input type="text"></td></tr><tr><td>Ana López García</td><td><input type="text"></td></tr></table>`, {});
+  ok((await valores()).join('|') === '6|9.2', 'Ana López García recibe su nota en su fila; la otra fila es de Ana López (que también está en el cuaderno)');
+  r = await rellenar(`<table><tr><td>Luis Pérez</td><td><input type="text"></td><td><input type="text"></td></tr></table>`, {});
+  ok((await valores()).join('|') === '|' && r.ambiguos > 0, 'una fila con una casilla por tarea no se rellena (no se sabe cuál es)');
+  r = await rellenar(`<ul><li><div>Ana López García <input type="text"></div><div>Ana López <input type="text"></div></li></ul>`, {});
+  ok((await valores()).join('|') === '9.2|6', 'toda la lista en un solo elemento: cada casilla con el nombre de su bloque');
+  r = await rellenar(`<ul><li><span>Ana López García</span> <span>Ana López</span> <input type="text"> <input type="text"></li></ul>`, {});
+  ok((await valores()).join('|') === '|', 'nombres y casillas sin agrupar: no se cruzan notas');
+  r = await rellenar(`<table><tr><td>Pedro Gil</td><td><input type="text"></td></tr></table>`, {});
+  ok(r.hechos.length === 0, 'una página sin nuestros alumnos no se toca');
+  await page.close();
 }
 
 await browser.close();

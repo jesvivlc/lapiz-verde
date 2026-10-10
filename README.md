@@ -17,10 +17,14 @@ Corrección de tareas escolares (Primaria y ESO) con IA. El profesor sube las en
    - **Buzón de correo** del grupo: el alumno envía el trabajo como adjunto.
 
    Y escribe o genera la rúbrica. Lo que llega por enlace o correo puede corregirse solo por la noche (Batch API, mitad de coste).
-3. Cada entrega se corrige con Claude (`claude-sonnet-5`). Cuesta 1 corrección; si falla, se devuelve.
+3. Cada entrega se corrige con Claude (`claude-sonnet-5`) en **modo anónimo**: la IA no recibe el nombre del alumno. Cuesta 1 corrección; si falla, se devuelve.
 4. El profesor revisa, edita nota y comentario, y aprueba. Lo aprobado se guarda en `notas` con `origen='markmate'`.
 5. Puede enviar el feedback por correo (firmado con su nombre, respuesta a su correo) o copiarlo.
-6. Cuando se queda sin correcciones, compra un bono con Stripe.
+6. Desde el cuaderno, «📤 Pasar notas» lleva las notas (y los comentarios) a su plataforma sin conectarse a ella:
+   - **Moodle** (Aules y las autonómicas): rellena la hoja de calificaciones que el profe descarga de la tarea, para volver a subirla.
+   - **Extensión de Chrome** (`extension/`): rellena la página de calificaciones abierta (Classroom, ITACA, Séneca…); el profe revisa y guarda.
+   - **Copiar y pegar** en columnas.
+7. Cuando se queda sin correcciones, compra un bono con Stripe.
 
 ## Estructura
 
@@ -38,6 +42,8 @@ api/
   stripe-webhook.js        Stripe avisa del pago → suma créditos (idempotente)
   enviar-feedback.js       POST: envía el feedback por correo con Resend
 entregar.html              página del alumno para entregar (sin cuenta)
+pasar-notas.js             hoja de calificaciones de Moodle y copiar/pegar (navegador; se prueba en Node)
+extension/                 extensión de Chrome «Pasar notas» (manifest v3, sin permisos de host)
 lib/servidor.js            utilidades del servidor (Supabase service_role, sesión, errores)
 lib/correccion.js          corrección con IA común a todos los canales
 lib/entregas.js            leer del almacén lo entregado y guardar la propuesta
@@ -54,7 +60,7 @@ Ver [.env.example](.env.example): `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KE
 
 ```bash
 npm install
-npm test                   # API con red simulada + migraciones y RLS en PGlite
+npm test                   # API con red simulada + hoja de Moodle + migraciones y RLS en PGlite
 npm i --no-save playwright@1.63.0 jszip && npx playwright install chromium
 node tests/e2e.mjs         # frontend en Chromium con Supabase y API simulados
 ```
