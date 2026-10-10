@@ -599,6 +599,20 @@
     .faq details { background: var(--surface); border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 16px 20px; }
     .faq summary { font-weight: 700; cursor: pointer; }
     .faq p { margin-top: 10px; color: var(--text-muted); font-size: 14px; }
+    .seccion-sub { text-align: center; color: var(--text-muted); margin: -12px auto 24px; max-width: 620px; }
+    .guia-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .guia-grid .paso p strong { color: var(--text); }
+    .guia-nota { text-align: center; font-size: 14px; color: var(--text-muted); margin-top: 18px; }
+    .proteccion {
+      background: var(--primary-light); border: 1px solid #BBF7D0; border-radius: var(--radius); padding: 32px 28px;
+    }
+    .proteccion-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .garantia { background: var(--surface); border-radius: var(--radius-sm); padding: 18px; }
+    .garantia .icono { font-size: 24px; line-height: 1; margin-bottom: 8px; }
+    .garantia h4 { font-size: 15px; margin-bottom: 4px; }
+    .garantia p { font-size: 14px; color: var(--text-muted); }
+    .proteccion .mas { text-align: center; font-size: 14px; margin-top: 18px; }
+    .proteccion .mas a { color: var(--primary-dark); font-weight: 600; }
     .landing-footer { text-align: center; font-size: 13px; color: var(--text-muted); }
     .landing-footer a { color: var(--text-muted); }
 
@@ -641,7 +655,8 @@
       .form-footer { flex-direction: column; align-items: stretch; }
       .config-grid { grid-template-columns: 1fr; }
       .grupos-grid { grid-template-columns: 1fr; }
-      .hero, .pasos-grid, .precios-grid, .bonos, .destino-box { grid-template-columns: 1fr; }
+      .hero, .pasos-grid, .guia-grid, .precios-grid, .bonos, .destino-box, .proteccion-grid { grid-template-columns: 1fr; }
+      .proteccion { padding: 24px 16px; }
       .hero h2 { font-size: 30px; }
       .header-inner { flex-wrap: wrap; }
       .header-user { margin-left: 0; width: 100%; flex-wrap: wrap; }
@@ -681,25 +696,70 @@
       </form>
     </section>
 
-    <section>
-      <h3 class="seccion-titulo">Cómo funciona</h3>
-      <div class="pasos-grid">
+    <section id="guia">
+      <h3 class="seccion-titulo">Así de fácil</h3>
+      <p class="seccion-sub">Sin instalar nada: funciona en el navegador del ordenador y del móvil.</p>
+      <div class="pasos-grid guia-grid">
         <div class="paso">
           <div class="paso-num">1</div>
-          <h4>Sube la clase entera</h4>
-          <p>El ZIP de entregas de Teams o de Aules/Moodle, tal cual lo descargas. PDF o fotos, también de libretas.</p>
+          <h4>Entra y crea tu clase</h4>
+          <p>Con tu correo, sin contraseñas. Importa la lista de alumnos desde un Excel y crea la tarea.</p>
         </div>
         <div class="paso">
           <div class="paso-num">2</div>
-          <h4>Recibe una propuesta por alumno</h4>
-          <p>Nota, comentario con ejemplos de su propio trabajo y tres mejoras concretas, aplicando tu rúbrica igual a todos.</p>
+          <h4>Recoge los trabajos</h4>
+          <p>Como te venga mejor: <strong>un enlace o un QR</strong> para que cada alumno suba fotos desde el móvil, el <strong>ZIP</strong> de Aules, Teams o Classroom tal cual se descarga, o <strong>las libretas escaneadas</strong> de una vez.</p>
         </div>
         <div class="paso">
           <div class="paso-num">3</div>
-          <h4>Tú decides</h4>
-          <p>Ajustas lo que quieras y apruebas. La nota va a tu cuaderno y el feedback le llega al alumno firmado por ti.</p>
+          <h4>Pulsa «Corregir»</h4>
+          <p>Con tu rúbrica (o te proponemos una). Cada alumno recibe nota, comentario con ejemplos de su propio trabajo y tres mejoras concretas.</p>
+        </div>
+        <div class="paso">
+          <div class="paso-num">4</div>
+          <h4>Revisa, aprueba y listo</h4>
+          <p>Cambias lo que quieras y apruebas. Las notas van a tu cuaderno y las pasas a <strong>Aules, Classroom o ITACA</strong> sin teclearlas.</p>
         </div>
       </div>
+      <p class="guia-nota">¿Prefieres no recoger nada? Activa «Corregir por la noche» y por la mañana lo tienes todo listo para revisar.</p>
+    </section>
+
+    <section class="proteccion" id="proteccion">
+      <h3 class="seccion-titulo">Tus alumnos, protegidos</h3>
+      <p class="seccion-sub">Trabajamos con datos de menores y nos lo tomamos en serio. Esto es lo que hacemos con ellos, sin letra pequeña.</p>
+      <div class="proteccion-grid">
+        <div class="garantia">
+          <div class="icono">🙈</div>
+          <h4>La IA no sabe quién es</h4>
+          <p>Nunca le enviamos el nombre del alumno: solo su trabajo, el curso y tu rúbrica. Y le pedimos que no copie ningún nombre que vea escrito.</p>
+        </div>
+        <div class="garantia">
+          <div class="icono">🔒</div>
+          <h4>Solo tú ves tu clase</h4>
+          <p>Cada cuenta está aislada de las demás. Nadie más ve tus grupos, tus alumnos ni sus notas, y todo viaja cifrado.</p>
+        </div>
+        <div class="garantia">
+          <div class="icono">🗑️</div>
+          <h4>Los trabajos se borran</h4>
+          <p>Lo que subes desde tu ordenador no se guarda. Lo que entregan los alumnos se borra al aprobar la corrección, o como mucho a los 60 días.</p>
+        </div>
+        <div class="garantia">
+          <div class="icono">🚫</div>
+          <h4>No entrenan ninguna IA</h4>
+          <p>Usamos el servicio profesional de Anthropic, que por contrato no usa estos datos para entrenar sus modelos.</p>
+        </div>
+        <div class="garantia">
+          <div class="icono">👩‍🏫</div>
+          <h4>Tú tienes la última palabra</h4>
+          <p>La aplicación solo propone. Ninguna nota ni comentario llega al alumno o al cuaderno sin que lo revises y lo apruebes.</p>
+        </div>
+        <div class="garantia">
+          <div class="icono">🏫</div>
+          <h4>Nada se conecta a tu centro</h4>
+          <p>Para pasar las notas no pedimos acceso a la plataforma del centro: todo ocurre en tu navegador y tú pulsas «Guardar».</p>
+        </div>
+      </div>
+      <p class="mas">Todos los detalles, en lenguaje claro: <a href="privacidad.html">política de privacidad</a>.</p>
     </section>
 
     <section>
@@ -735,7 +795,7 @@
       </details>
       <details>
         <summary>¿Qué pasa con los datos de mis alumnos?</summary>
-        <p>Tus grupos, alumnos y notas solo los ves tú. Los trabajos se envían para su corrección y no se guardan en nuestros servidores. Detalles en la <a href="privacidad.html">política de privacidad</a>.</p>
+        <p>Tus grupos, alumnos y notas solo los ves tú. A la IA no le enviamos el nombre de ningún alumno. Los trabajos que subes desde tu ordenador no se guardan, y los que entregan los alumnos por el enlace se borran al aprobar la corrección o, como mucho, a los 60 días. Lo tienes resumido en <a href="#proteccion">«Tus alumnos, protegidos»</a> y con detalle en la <a href="privacidad.html">política de privacidad</a>.</p>
       </details>
       <details>
         <summary>¿Cómo pago?</summary>
