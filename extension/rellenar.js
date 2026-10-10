@@ -63,7 +63,7 @@
     const tope = campo.closest(FILA);
     let el = campo.parentElement;
     for (let i = 0; el && el !== document.body && i < 12; i++, el = el.parentElement) {
-      if (!tope && campos.some((c) => c !== campo && el.contains(c))) return null;
+      if (campos.some((c) => c !== campo && el.contains(c) && !tope?.contains(c))) return null;
       const r = quien(textoDe(el), alumnos);
       if (r) return { ...r, fila: el };
       if (el === tope) return null;
@@ -142,9 +142,12 @@
       const completas = [...f].filter(([, completa]) => completa);
       return completas.length === 1 && completas[0][0] === r.fila;
     };
+    /* Una fila con varias casillas de escribir (una columna por tarea) es dudosa: no se
+       sabe cuál es la de esta nota */
+    const variasCasillas = (fila) => campos.filter((c) => c.tagName === 'INPUT' && fila.contains(c)).length > 1;
     for (const { campo, r } of asignados) {
       const a = r.alumno;
-      if (!filaValida(r)) { ambiguos++; continue; }
+      if (!filaValida(r) || variasCasillas(r.fila)) { ambiguos++; continue; }
       if (hechos.has(a.i) || a.nota == null) continue;
       const valor = valorPara(campo, a.nota, op);
       if (valor == null) { incompatibles.add(a.i); continue; }

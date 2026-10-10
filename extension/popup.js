@@ -82,7 +82,7 @@ async function rellenar() {
       if (ambiguos) {
         const p = document.createElement('p');
         p.className = 'muted';
-        p.textContent = 'Algunas filas tenían nombres repetidos o dudosos y no las he tocado.';
+        p.textContent = 'Algunas filas eran dudosas (nombres repetidos o varias casillas de nota en la misma fila) y no las he tocado: ponlas a mano.';
         res.append(p);
       }
     }
