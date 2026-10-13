@@ -191,6 +191,63 @@
   }
 
   /* ══════════════════════════════════════
+     Sacar la lista de alumnos de las rutas (grupo sin alumnos todavía)
+  ══════════════════════════════════════ */
+
+  /** ¿Parece un nombre de persona? «Ana López García», «López García, Ana»; no «IMG_2041» ni «redacción final» */
+  function pareceNombre(texto) {
+    const ps = String(texto).trim().split(/[\s,]+/).filter(Boolean);
+    if (ps.length < 2 || ps.length > 6) return false;
+    if (!ps.every(p => /^[\p{L}][\p{L}'’.\-]*$/u.test(p))) return false;
+    if (!ps.every(p => /^\p{Lu}/u.test(p) || PARTICULAS.has(p.toLowerCase()))) return false;
+    return ps.some(p => !RUIDO.has(norm(p)) && !PARTICULAS.has(p.toLowerCase()));
+  }
+
+  /** «López García, Ana» → { nombre: 'Ana', apellidos: 'López García' }; «María José Sanz Gil» → 2 + 2 */
+  function partirNombre(texto) {
+    const t = String(texto).trim().replace(/\s+/g, ' ');
+    if (t.includes(',')) {
+      const [apellidos, nombre] = t.split(',').map(s => s.trim());
+      return { nombre, apellidos };
+    }
+    const ps = t.split(' ');
+    const n = ps.length >= 4 ? 2 : 1;
+    return { nombre: ps.slice(0, n).join(' '), apellidos: ps.slice(n).join(' ') };
+  }
+
+  /**
+   * Nombres de alumnos que aparecen en las rutas de las entregas: carpeta de Moodle («Ana López_12_assignsubmission_file_»),
+   * carpeta de Teams/OneDrive («Submitted files/López, Ana»), carpeta por alumno en cualquier ZIP, o el principio del
+   * archivo de Drive («Ana López - Tarea.pdf»). Devuelve [{ nombre, apellidos }] sin repetidos.
+   */
+  function nombresDeRutas(rutas) {
+    const encontrados = [];
+    const moodle = rutas.map(r => r.split('/').find(t => /_\d+_assign(submission|feedback)_/i.test(t))).filter(Boolean);
+    const teams = rutas.map(r => { const ts = r.split('/'); const k = ts.findIndex(t => /^submitted files$/i.test(t)); return k >= 0 && k + 2 < ts.length ? ts[k + 1] : null; }).filter(Boolean);
+    if (moodle.length) encontrados.push(...moodle.map(etiqueta));
+    else if (teams.length) encontrados.push(...teams);
+    else {
+      // El nivel de carpetas con más nombres distintos que parecen de persona
+      let mejor = [];
+      const fondo = Math.max(0, ...rutas.map(r => r.split('/').length - 1));
+      for (let d = 0; d < fondo; d++) {
+        const nivel = [...new Set(rutas.map(r => r.split('/')).filter(ts => ts.length - 1 > d).map(ts => ts[d]))];
+        const nombres = nivel.filter(pareceNombre);
+        if (nombres.length >= 2 && nombres.length >= nivel.length * 0.6 && nombres.length > mejor.length) mejor = nombres;
+      }
+      if (mejor.length) encontrados.push(...mejor);
+      else encontrados.push(...rutas.map(r => r.split('/').pop().replace(/\.[a-z0-9]+$/i, '').split(/\s+[-–_]\s+/)[0]));
+    }
+    const vistos = new Set();
+    return encontrados.filter(pareceNombre).map(partirNombre).filter(a => {
+      const clave = palabras(`${a.nombre} ${a.apellidos}`).sort().join(' ');
+      if (vistos.has(clave)) return false;
+      vistos.add(clave);
+      return true;
+    });
+  }
+
+  /* ══════════════════════════════════════
      Texto de documentos (XML dentro de un ZIP)
      El alumno controla el documento: nada de expresiones regulares que puedan atascarse.
      El XML se recorre una sola vez buscando «<» y «>» con indexOf.
@@ -377,7 +434,7 @@
   }
 
   global.LeerTrabajos = {
-    norm, palabras, tipoArchivo, emparejarEntregas, resolverEntregas,
+    norm, palabras, tipoArchivo, emparejarEntregas, resolverEntregas, pareceNombre, partirNombre, nombresDeRutas,
     textoDeDocx, textoDePptx, textoDeOdf, textoDeHtml, anonimizar, MARCA,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
