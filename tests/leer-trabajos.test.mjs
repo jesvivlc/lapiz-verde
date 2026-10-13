@@ -131,6 +131,22 @@ console.log('== Documentos manipulados: no atascan la página ==');
   }
 }
 
+console.log('== La lista de alumnos, sacada de las rutas ==');
+{
+  const { pareceNombre, partirNombre, nombresDeRutas } = globalThis.LeerTrabajos;
+  ok(pareceNombre('Ana López García') && pareceNombre('López García, Ana') && pareceNombre('María de la Fuente'), 'nombres de persona');
+  ok(!pareceNombre('IMG_2041') && !pareceNombre('Comentario tema 3') && !pareceNombre('redacción final') && !pareceNombre('Ana') && !pareceNombre('Versión 2') && !pareceNombre('Foto Página'), 'lo que no es un nombre');
+  ok(JSON.stringify(partirNombre('López García, Ana')) === '{"nombre":"Ana","apellidos":"López García"}', '«Apellidos, Nombre»');
+  ok(JSON.stringify(partirNombre('María José Sanz Gil')) === '{"nombre":"María José","apellidos":"Sanz Gil"}' && partirNombre('Luis Pérez').apellidos === 'Pérez', 'nombre compuesto con cuatro palabras');
+  const lista = r => nombresDeRutas(r).map(a => `${a.nombre}|${a.apellidos}`).join(', ');
+  ok(lista(['Ana López_12_assignsubmission_file_/a.pdf', 'Ana López_12_assignsubmission_onlinetext_/onlinetext.html', 'Luis Pérez Gil_13_assignsubmission_file_/b.docx']) === 'Ana|López, Luis|Pérez Gil', 'Moodle: de las carpetas, sin repetir');
+  ok(lista(['Student Work/Submitted files/López García, Ana/Tarea 1/a.pdf', 'Student Work/Submitted files/Pérez, Luis/Tarea 1/b.pdf']) === 'Ana|López García, Luis|Pérez', 'Teams (OneDrive): «Apellidos, Nombre»');
+  ok(lista(['Comentario tema 3/Ana López García/Versión 1/a.pdf', 'Comentario tema 3/Ana López García/Versión 2/a.pdf', 'Comentario tema 3/Luis Pérez/b.png']) === 'Ana|López García, Luis|Pérez', 'Teams (ZIP de la tarea): una carpeta por alumno');
+  ok(lista(['Comentario tema 3/Ana López García - Comentario tema 3.pdf', 'Comentario tema 3/IMG_2041.jpg', 'Comentario tema 3/Luis Pérez - foto 1.jpg']) === 'Ana|López García, Luis|Pérez', 'Drive (Classroom): el principio del nombre del archivo');
+  ok(lista(['Ana López.pdf', 'Luis Pérez.docx', 'escaneo.pdf']) === 'Ana|López, Luis|Pérez', 'archivos sueltos con el nombre del alumno');
+  ok(lista(['IMG_1.jpg', 'IMG_2.jpg']) === '', 'fotos del móvil sin nombre: ninguno');
+}
+
 console.log('== Texto de Word ==');
 {
   const xml = '<?xml version="1.0"?><w:document xmlns:w="x"><w:body>' +

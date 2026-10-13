@@ -51,7 +51,7 @@ documentos.file('__MACOSX/._redaccion.docx', Buffer.from('x'));
 const USER = { id: 'u-1', email: 'bruno@x.es', aud: 'authenticated', role: 'authenticated' };
 const db = {
   perfiles: [{ id: 'u-1', email: 'bruno@x.es', nombre: 'Bruno', creditos: 18 }],
-  grupos: [{ id: 'g-1', nombre: '3.º ESO A', nivel: '3ESO' }],
+  grupos: [{ id: 'g-1', nombre: '3.º ESO A', nivel: '3ESO' }, { id: 'g-2', nombre: '1.º ESO B (nuevo)', nivel: '1ESO' }],
   tareas: [{ id: 't-1', titulo: 'Comentario tema 3', rubrica: '- Rúbrica guardada (10 pts)', evaluacion: '1', peso_nota: null }],
   alumnos: [
     { id: 'a-1', nombre: 'Ana', apellidos: 'López García', email: 'ana@x.es' },
@@ -61,6 +61,7 @@ const db = {
   ],
 };
 db.entregas = [];
+const altasAlumnos = [];
 const upserts = [], correcciones = [], patches = [], borrados = [], llamadasEntregas = [], subidas = [];
 let creditosApi = 18;
 // De quién es una corrección, por el contenido del primer archivo (Ana y Marta mandan PDF; Luis, foto)
@@ -117,6 +118,11 @@ async function prepararRuta(route) {
     if (m === 'POST' || m === 'PATCH') {
       const b = req.postDataJSON();
       if (tabla === 'notas') upserts.push(b);
+      if (tabla === 'alumnos' && m === 'POST') {   // alta desde el Corrector: devuelve las filas creadas (no se guardan en db)
+        const filas = (Array.isArray(b) ? b : [b]).map((a, k) => ({ id: `n-${altasAlumnos.length + k}`, email: null, ...a }));
+        altasAlumnos.push(...filas);
+        return json(filas, 201);
+      }
       if (m === 'PATCH') {
         patches.push({ tabla, b, filtro: url.search });
         if (tabla === 'tareas' || tabla === 'grupos' || tabla === 'entregas') {
@@ -132,6 +138,7 @@ async function prepararRuta(route) {
     if (tabla === 'perfiles') filas = filas.filter(p => p.id === eq('id'));
     if (tabla === 'entregas') filas = filas.filter(e => e.tarea_id === eq('tarea_id'));
     if (tabla === 'grupos' && eq('id')) filas = filas.filter(g => g.id === eq('id'));
+    if (tabla === 'alumnos' && eq('grupo_id')) filas = filas.filter(a => (a.grupo_id ?? 'g-1') === eq('grupo_id'));
     const cabecera = req.headers()['accept'] || '';
     if (cabecera.includes('vnd.pgrst.object')) return json(filas[0] ?? null);
     return json(filas);
@@ -203,7 +210,7 @@ console.log('== Con sesión: corregir con grupo del cuaderno (ZIP de Teams) ==')
   ok(await page.inputValue('#rubrica') === '- Rúbrica guardada (10 pts)', 'carga la rúbrica guardada de la tarea');
   ok(await page.inputValue('#nombreTarea') === 'Comentario tema 3', 'rellena el nombre de la tarea');
 
-  await page.setInputFiles('#zipFile', OUT + 'teams.zip');
+  await page.setInputFiles('#trabajosFile', OUT + 'teams.zip');
   await page.click('#btnCorregir');
   await page.waitForSelector('#btnConfirmarEmparejado');
   const resumen = await page.textContent('#modalContenido');
@@ -266,7 +273,7 @@ console.log('== ZIP de Moodle/Aules + Excel, y quedarse sin créditos ==');
   await page.waitForFunction(() => document.getElementById('alumnosNum').textContent === '1');
   await page.fill('#nombreTarea', 'Redacción');
   await page.fill('#rubrica', '- x (10 pts)');
-  await page.setInputFiles('#zipFile', OUT + 'moodle.zip');
+  await page.setInputFiles('#trabajosFile', OUT + 'moodle.zip');
   await page.click('#btnCorregir');
   await page.waitForSelector('#btnConfirmarEmparejado');
   await page.click('#btnConfirmarEmparejado');
@@ -300,7 +307,7 @@ console.log('== Word, LibreOffice y alumnos que se confunden ==');
   zipDoc.file('Ana García Pérez_11_assignsubmission_file_/redaccion.docx', await docx(['Nombre: Ana García Pérez', 'Mi verano en la playa de Ana García Pérez fue largo.'], imagen));
   for (const [ruta, f] of Object.entries(documentos.files)) if (!ruta.startsWith('Ana García Pérez') && !f.dir) zipDoc.file(ruta, await f.async('nodebuffer'));
   fs.writeFileSync(OUT + 'documentos.zip', await zipDoc.generateAsync({ type: 'nodebuffer' }));
-  await page.setInputFiles('#zipFile', OUT + 'documentos.zip');
+  await page.setInputFiles('#trabajosFile', OUT + 'documentos.zip');
   await page.click('#btnCorregir');
   await page.waitForSelector('#btnConfirmarEmparejado');
   const resumen = await page.textContent('#modalContenido');
@@ -340,6 +347,82 @@ console.log('== Word, LibreOffice y alumnos que se confunden ==');
   await page.click('#modalContenido >> text=Cancelar');
   await page.waitForTimeout(300);
   ok(correcciones.length === 0 && await page.isHidden('#modal'), 'cancelar el resumen no corrige nada');
+}
+
+console.log('== Una sola zona: grupo vacío, archivos sueltos, fotos sin nombre y alumno nuevo ==');
+{
+  correcciones.length = 0; creditosApi = 20;
+  const { page, errores } = await prepararPagina(browser, { conSesion: true });
+  await page.waitForSelector('#app:not(.hidden)');
+  ok(await page.$('#zipFile') === null && await page.$('#escaneoFile') === null, 'ya no hay una zona para el ZIP y otra para el escaneo');
+
+  // Grupo sin alumnos + ZIP de Moodle: la lista sale del ZIP y se guarda en el grupo
+  await page.selectOption('#selGrupo', 'g-2');
+  await page.waitForFunction(() => !document.getElementById('selTarea').disabled);
+  await page.evaluate(() => { tareasGrupoSel.push({ id: 't-9', titulo: 'Redacción', rubrica: '- x (10 pts)' }); const o = new Option('Redacción', 't-9'); document.getElementById('selTarea').add(o); });
+  await page.selectOption('#selTarea', 't-9');
+  await page.fill('#nombreTarea', 'Redacción');
+  await page.fill('#rubrica', '- x (10 pts)');
+  await page.setInputFiles('#trabajosFile', OUT + 'documentos.zip');
+  await page.click('#btnCorregir');
+  await page.waitForSelector('#btnCrearLista');
+  const lista = await page.textContent('#modalContenido');
+  ok(lista.includes('todavía no tiene alumnos') && ['Ana García Pérez', 'Ana García López', 'Luis Pérez', 'Marta Ruiz'].every(n => lista.includes(n)), 'grupo vacío: propone la lista con los 4 nombres del ZIP');
+  await page.screenshot({ path: OUT + '4c-lista.png', fullPage: true });
+  await page.click('#btnCrearLista');
+  await page.waitForSelector('#btnConfirmarEmparejado');
+  ok(altasAlumnos.length === 4 && altasAlumnos.every(a => a.grupo_id === 'g-2') && altasAlumnos.some(a => a.nombre === 'Ana' && a.apellidos === 'García Pérez'), 'los da de alta en el grupo, con nombre y apellidos');
+  const resumen = await page.textContent('#modalContenido');
+  ok(resumen.includes('3 trabajos listos') && !resumen.includes('Revisa de quién'), 'con la lista sacada del ZIP, cada uno con lo suyo (Marta, .doc: no gasta)');
+  await page.click('#modalContenido >> text=Cancelar');
+
+  // Archivos sueltos con el nombre del alumno, sin grupo y sin Excel
+  await page.selectOption('#selGrupo', '');
+  await page.fill('#nombreTarea', 'Redacción');
+  await page.fill('#rubrica', '- x (10 pts)');
+  const docLuis = await docx(['Texto de Luis']);
+  await page.setInputFiles('#trabajosFile', [
+    { name: 'Ana López.pdf', mimeType: 'application/pdf', buffer: pdfDe('Ana') },
+    { name: 'Luis Pérez.docx', mimeType: 'application/octet-stream', buffer: docLuis },
+    { name: 'Sergio Vidal.pdf', mimeType: 'application/pdf', buffer: pdfDe('Sergio') },
+  ]);
+  ok((await page.textContent('#trabajosZone')).includes('3 archivos'), 'la zona dice cuántos archivos hay');
+  await page.click('#btnCorregir');
+  await page.waitForSelector('#btnCrearLista');
+  await page.click('[data-nombre="2"]');   // Sergio no es de la clase
+  await page.click('#btnCrearLista');
+  await page.waitForSelector('#btnConfirmarEmparejado');
+  const r2 = await page.textContent('#modalContenido');
+  ok(r2.includes('2 trabajos listos') && r2.includes('Sergio Vidal'), 'sin grupo ni Excel: lista temporal; lo de Sergio queda por revisar');
+  ok(await page.$('select[aria-label="De quién es Sergio Vidal.pdf"] option[value="nuevo"]') !== null, 'ofrece añadir a Sergio a la lista');
+  await page.selectOption('select[aria-label="De quién es Sergio Vidal.pdf"]', 'nuevo');
+  ok(await page.textContent('#btnConfirmarEmparejado') === 'Corregir 3', 'al añadirlo, el contador sube a 3');
+  await page.click('#btnConfirmarEmparejado');
+  await page.waitForSelector('#btnCorregir:not([disabled])', { timeout: 20000 });
+  await page.waitForTimeout(300);
+  ok(correcciones.length === 3 && correcciones.some(c => c.texto_tarea?.includes('Texto de [nombre del alumno]')), `3 correcciones, el Word de Luis como texto (${correcciones.length})`);
+  ok(await page.evaluate(() => cards.some(c => c.alumno.nombre === 'Sergio Vidal' && c.result)), 'Sergio tiene su tarjeta corregida');
+
+  // Fotos del móvil sin nombre ni pegatina: el profe dice de quién es cada una
+  correcciones.length = 0;
+  await page.selectOption('#selGrupo', 'g-1');
+  await page.waitForFunction(() => !document.getElementById('selTarea').disabled);
+  await page.selectOption('#selTarea', 't-1');
+  await page.setInputFiles('#trabajosFile', [
+    { name: 'IMG_2041.jpg', mimeType: 'image/png', buffer: fs.readFileSync(OUT + 'foto-grande.png') },
+    { name: 'IMG_2042.jpg', mimeType: 'image/png', buffer: fs.readFileSync(OUT + 'foto-grande.png') },
+  ]);
+  await page.click('#btnCorregir');
+  await page.waitForSelector('#btnConfirmarEmparejado', { timeout: 60000 });
+  const r3 = await page.textContent('#modalContenido');
+  ok(r3.includes('Revisa de quién son (2)') && r3.includes('IMG_2041.jpg') && await page.textContent('#btnConfirmarEmparejado') === 'Corregir 0', 'sin pegatinas ni nombres: las dos fotos, para elegir; nada se corrige solo');
+  await page.selectOption('select[aria-label="De quién es IMG_2041.jpg"]', { label: 'Luis Pérez' });
+  await page.selectOption('select[aria-label="De quién es IMG_2042.jpg"]', { label: 'Luis Pérez' });
+  await page.click('#btnConfirmarEmparejado');
+  await page.waitForSelector('#btnCorregir:not([disabled])', { timeout: 20000 });
+  await page.waitForTimeout(300);
+  ok(correcciones.length === 1 && correcciones[0].archivos.length === 2, 'las dos fotos, a Luis, en una sola corrección');
+  ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
 }
 
 console.log('== Cuaderno ==');
@@ -452,7 +535,7 @@ console.log('== Escaneo de libretas con pegatinas QR ==');
   await page.selectOption('#selGrupo', 'g-1');
   await page.waitForFunction(() => !document.getElementById('selTarea').disabled);
   await page.selectOption('#selTarea', 't-1');
-  await page.setInputFiles('#escaneoFile', OUT + 'escaneo.pdf');
+  await page.setInputFiles('#trabajosFile', OUT + 'escaneo.pdf');
   page.once('dialog', d => d.accept());
   await page.click('#btnCorregir');
   await page.waitForFunction(() => document.getElementById('progressText').textContent.includes('completada'), null, { timeout: 60000 });

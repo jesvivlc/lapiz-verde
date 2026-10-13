@@ -874,7 +874,7 @@
           <label for="selTarea">Tarea</label>
           <select id="selTarea" onchange="onTareaChange()" disabled></select>
         </div>
-        <div class="destino-hint" id="destinoHint">Elige grupo y tarea para que las notas aprobadas se guarden solas en tu cuaderno. Si no, puedes corregir con un Excel de alumnos.</div>
+        <div class="destino-hint" id="destinoHint">Elige grupo y tarea para que las notas aprobadas se guarden solas en tu cuaderno. Si no, corrige igual: saco la lista de alumnos de los trabajos o de un Excel.</div>
         <div class="bandeja hidden" id="bandeja">
           <div class="bandeja-fila">
             <div>
@@ -891,33 +891,22 @@
         </div>
       </div>
 
-      <div class="form-group">
-        <label>ZIP de entregas</label>
-        <div class="dropzone" id="zipZone">
-          <input type="file" id="zipFile" accept=".zip" onchange="onZipSelected(this)">
-          <span class="dropzone-icon">📦</span>
-          <div class="dropzone-label">Arrastra el ZIP aquí o haz clic</div>
-          <div class="dropzone-hint">Descargado de Teams, Aules/Moodle ("Descargar todas las entregas") o Drive. PDF, fotos, Word, LibreOffice o PowerPoint</div>
+      <div class="form-group full-width">
+        <label>Trabajos de los alumnos</label>
+        <div class="dropzone" id="trabajosZone">
+          <input type="file" id="trabajosFile" multiple accept=".zip,.pdf,image/*,.docx,.docm,.odt,.odp,.pptx,.html,.htm,.txt" onchange="onTrabajosSelected(this)">
+          <span class="dropzone-icon">📥</span>
+          <div class="dropzone-label">Suelta aquí los trabajos, como los tengas</div>
+          <div class="dropzone-hint">El ZIP de Aules, Moodle, Teams o Drive, la carpeta descomprimida o los archivos sueltos: PDF, fotos, Word, LibreOffice o PowerPoint. Las libretas escaneadas con pegatina QR, también aquí.</div>
         </div>
       </div>
-
-      <div class="form-group">
-        <label>Escaneo de libretas (con pegatina QR)</label>
-        <div class="dropzone" id="escaneoZone">
-          <input type="file" id="escaneoFile" accept=".pdf,image/*" multiple onchange="onEscaneoSelected(this)">
-          <span class="dropzone-icon">🏷️</span>
-          <div class="dropzone-label">Arrastra el PDF escaneado o las fotos</div>
-          <div class="dropzone-hint">Con la pegatina QR de cada alumno en su primera página. Imprímelas desde el Cuaderno.</div>
-        </div>
-      </div>
-
       <div class="form-group" id="excelGroup">
-        <label>Excel de alumnos</label>
+        <label>Excel de alumnos (opcional)</label>
         <div class="dropzone" id="excelZone">
           <input type="file" id="excelFile" accept=".xlsx,.xls,.csv" onchange="onExcelSelected(this)">
           <span class="dropzone-icon">📊</span>
           <div class="dropzone-label">Arrastra el Excel aquí o haz clic</div>
-          <div class="dropzone-hint">Columnas: "nombre", "apellidos" (opcional) y "email"</div>
+          <div class="dropzone-hint">Columnas: "nombre", "apellidos" y "email". Sin Excel, saco los nombres de los trabajos</div>
         </div>
       </div>
 
@@ -1067,7 +1056,7 @@
   let cellsDirty = new Set();
 
   let alumnosData = [];        // del Excel: [{nombre, email}]
-  let archivosEscaneo = [];    // PDF o fotos con pegatinas QR
+  let trabajos = [];           // lo soltado en «Trabajos»: [{ ruta, file }] (ZIPs, archivos sueltos o carpetas)
   let entregasTarea = [];      // lo recibido por enlace o correo para la tarea elegida
   let cards = [];              // índice → {alumno, result, estado, corregir?, entregas?}
   let isProcessing = false;
@@ -1099,9 +1088,8 @@
 
   async function iniciar() {
     rellenarSelectsCurso();
-    setupDropzone('zipZone',   'zipFile',   /\.zip$/i,              onZipSelected);
     setupDropzone('excelZone', 'excelFile', /\.(xlsx|xls|csv)$/i,   onExcelSelected);
-    setupDropzone('escaneoZone', 'escaneoFile', /\.(pdf|jpe?g|png|webp|heic)$/i, onEscaneoSelected, true);
+    setupZonaTrabajos();
     document.getElementById('formLogin').addEventListener('submit', enviarEnlace);
     document.getElementById('sinIdentificar').addEventListener('click', onClickSinIdentificar);
     document.getElementById('btnBuzon').classList.toggle('hidden', !DOMINIO_ENTREGAS);
@@ -1401,16 +1389,73 @@
     zone.querySelector('.dropzone-label').textContent = fileName;
   }
 
-  function onEscaneoSelected(input) {
-    archivosEscaneo = [...input.files];
-    if (archivosEscaneo.length) {
-      markZoneLoaded('escaneoZone', archivosEscaneo.length === 1 ? archivosEscaneo[0].name : `${archivosEscaneo.length} archivos`);
-    }
+  /* Lo que el profe suelta en «Trabajos»: ZIPs, archivos sueltos o carpetas enteras */
+  function onTrabajosSelected(input) {
+    ponerTrabajos([...input.files].map(f => ({ ruta: f.webkitRelativePath || f.name, file: f })));
   }
 
-  function onZipSelected(input) {
-    const file = input.files[0];
-    if (file) markZoneLoaded('zipZone', file.name);
+  function ponerTrabajos(lista) {
+    trabajos = lista.filter(t => LeerTrabajos.tipoArchivo(t.ruta) !== 'ignorar');
+    if (!trabajos.length) return showToast('No hay ningún archivo', 'error');
+    const carpetas = [...new Set(trabajos.map(t => t.ruta.split('/')[0]))];
+    markZoneLoaded('trabajosZone', trabajos.length === 1 ? trabajos[0].file.name
+      : carpetas.length === 1 && trabajos[0].ruta.includes('/') ? `Carpeta «${carpetas[0]}» · ${trabajos.length} archivos` : `${trabajos.length} archivos`);
+  }
+
+  /* Al soltar, también carpetas: el Mac descomprime solo los ZIP que se descargan */
+  function setupZonaTrabajos() {
+    const zona = document.getElementById('trabajosZone');
+    zona.addEventListener('dragover', e => { e.preventDefault(); zona.classList.add('drag-over'); });
+    zona.addEventListener('dragleave', () => zona.classList.remove('drag-over'));
+    zona.addEventListener('drop', async e => {
+      e.preventDefault();
+      zona.classList.remove('drag-over');
+      const entradas = [...e.dataTransfer.items].map(i => i.webkitGetAsEntry?.()).filter(Boolean);   // antes de cualquier await
+      const sueltos = [...e.dataTransfer.files];
+      try {
+        ponerTrabajos(entradas.length ? await archivosDeEntradas(entradas) : sueltos.map(f => ({ ruta: f.name, file: f })));
+      } catch (err) {
+        showToast('No se pudo leer lo que has soltado: ' + err.message, 'error');
+      }
+    });
+  }
+
+  const MAX_ARCHIVOS_SOLTADOS = 3000;
+  async function archivosDeEntradas(entradas) {
+    const salida = [];
+    async function recorrer(entrada, base) {
+      if (salida.length >= MAX_ARCHIVOS_SOLTADOS) return;
+      if (entrada.isFile) {
+        const file = await new Promise((ok, ko) => entrada.file(ok, ko));
+        salida.push({ ruta: base + file.name, file });
+      } else if (entrada.isDirectory) {
+        const lector = entrada.createReader();
+        for (;;) {
+          const lote = await new Promise((ok, ko) => lector.readEntries(ok, ko));
+          if (!lote.length) break;
+          for (const e of lote) await recorrer(e, base + entrada.name + '/');
+        }
+      }
+    }
+    for (const e of entradas) await recorrer(e, '');
+    return salida;
+  }
+
+  /* Todo lo soltado como un único árbol de rutas, con cómo leer cada archivo.
+     Un ZIP solo se abre tal cual; si hay más cosas, sus rutas van dentro de una carpeta con su nombre. */
+  const lectorZip = e => ({ uint8: () => e.async('uint8array'), texto: () => e.async('string'), base64: () => e.async('base64'), mb: () => tamanoMB(e) });
+  const lectorArchivo = f => ({ uint8: async () => new Uint8Array(await f.arrayBuffer()), texto: () => f.text(), base64: () => blobABase64(f), mb: () => f.size / 1024 / 1024, file: f });
+  async function abrirTrabajos() {
+    const fuente = new Map();
+    for (const { ruta, file } of trabajos) {
+      if (!/\.zip$/i.test(file.name)) { fuente.set(ruta, lectorArchivo(file)); continue; }
+      const zip = await JSZip.loadAsync(file);
+      const base = trabajos.length > 1 ? ruta.replace(/\.zip$/i, '') + '/' : '';
+      for (const [r, e] of Object.entries(zip.files)) {
+        if (!e.dir && LeerTrabajos.tipoArchivo(r) !== 'ignorar') fuente.set(base + r, lectorZip(e));
+      }
+    }
+    return fuente;
   }
 
   async function onExcelSelected(input) {
@@ -1512,14 +1557,14 @@
     }
   }
 
-  async function leerArchivoZip(zip, ruta) {
+  async function leerArchivo(lector, ruta) {
     const ext = ruta.split('.').pop().toLowerCase();
     if (ext === 'pdf') {
-      const base64 = await zip.files[ruta].async('base64');
+      const base64 = await lector.base64();
       return { base64, tipo: 'pdf', sizeMB: base64.length * 3 / 4 / 1024 / 1024 };
     }
     const mime = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
-    const blob = new Blob([await zip.files[ruta].async('uint8array')], { type: mime });
+    const blob = new Blob([await lector.uint8()], { type: mime });
     const img = await prepararImagen(blob);
     return { ...img, sizeMB: img.base64.length * 3 / 4 / 1024 / 1024 };
   }
@@ -1759,17 +1804,14 @@
     return { taskName, rubrica, curso };
   }
 
-  /* Alumnos del grupo elegido o del Excel; null (con aviso) si no hay */
+  /* Alumnos del grupo elegido o del Excel; [] si todavía no hay lista (se saca de los trabajos); null (con aviso) si falta algo */
   async function alumnosParaCorregir() {
     if (document.getElementById('selGrupo').value) {
-      if (!alumnosGrupoSel.length) { showToast('Este grupo no tiene alumnos. Impórtalos desde el Cuaderno.', 'error'); return null; }
       if (!tareaDestino()) { showToast('Elige la tarea del cuaderno (o crea una nueva)', 'error'); return null; }
       return alumnosGrupoSel;
     }
     const excelFile = document.getElementById('excelFile').files[0];
-    if (!excelFile) { showToast('Sube el Excel de alumnos o elige un grupo del cuaderno', 'error'); return null; }
-    if (!alumnosData.length) await onExcelSelected(document.getElementById('excelFile'));
-    if (!alumnosData.length) { showToast('El Excel no tiene alumnos', 'error'); return null; }
+    if (excelFile && !alumnosData.length) await onExcelSelected(document.getElementById('excelFile'));
     return alumnosData;
   }
 
@@ -1895,13 +1937,13 @@
     });
   }
 
-  /* Texto e imágenes de un Word, PowerPoint, LibreOffice, HTML o .txt del ZIP */
-  async function leerDocumento(zip, ruta, tipo) {
+  /* Texto e imágenes de un Word, PowerPoint, LibreOffice, HTML o .txt */
+  async function leerDocumento(lector, tipo) {
     if (tipo === 'html' || tipo === 'txt') {
-      const crudo = await zip.files[ruta].async('string');
+      const crudo = await lector.texto();
       return { texto: tipo === 'html' ? LeerTrabajos.textoDeHtml(crudo) : crudo.trim(), imagenes: [] };
     }
-    const doc = await JSZip.loadAsync(await zip.files[ruta].async('uint8array'));
+    const doc = await JSZip.loadAsync(await lector.uint8());
     const leer = async f => new TextDecoder().decode(await leerConTope(doc.file(f)));
     const numero = f => parseInt((f.match(/(\d+)\.xml$/) || [])[1] || '0', 10);
     let texto, media;
@@ -1934,7 +1976,7 @@
 
   /* Lo de un alumno, de su última versión y en orden: PDF y fotos tal cual; de los documentos,
      el texto (sin su nombre ni el de sus compañeros) y sus imágenes. Lo que no se sabe leer no gasta corrección. */
-  async function leerEntregaZip(zip, rutasAlumno, nombreAlumno, otrosNombres = []) {
+  async function leerEntrega(fuente, rutasAlumno, nombreAlumno, otrosNombres = []) {
     const ultima = Math.max(...rutasAlumno.map(versionNum));
     const rutas = rutasAlumno.filter(r => versionNum(r) === ultima)
       .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
@@ -1948,11 +1990,11 @@
     const cabe = a => archivos.length < MAX_PAGINAS && mb + a.sizeMB <= MAX_MB_ARCHIVO;
     for (const ruta of legibles) {
       const tipo = LeerTrabajos.tipoArchivo(ruta);
-      if (tamanoMB(zip.files[ruta]) > MAX_MB_DESCOMPRIMIDO) {
+      if (fuente.get(ruta).mb() > MAX_MB_DESCOMPRIMIDO) {
         throw errorTarjeta('Archivo grande', `${ruta.split('/').pop()} es demasiado grande. Pídeselo en PDF comprimido. No ha gastado ninguna corrección.`);
       }
       if (tipo === 'pdf' || tipo === 'imagen') {
-        const a = await leerArchivoZip(zip, ruta);
+        const a = await leerArchivo(fuente.get(ruta), ruta);
         if (!cabe(a)) {
           if (!archivos.length && !textos.length) {
             throw errorTarjeta('Archivo grande', `El PDF ocupa ${a.sizeMB.toFixed(1)} MB y el máximo es ${MAX_MB_ARCHIVO} MB. Exporta el PDF comprimido o como fotos.`);
@@ -1965,7 +2007,7 @@
       }
       let doc;
       try {
-        doc = await leerDocumento(zip, ruta, tipo);
+        doc = await leerDocumento(fuente.get(ruta), tipo);
       } catch (e) {
         const grande = e.message === 'demasiado grande';
         throw errorTarjeta(grande ? 'Archivo grande' : 'No se puede abrir',
@@ -1999,7 +2041,7 @@
   }
 
   /* Resumen antes de gastar correcciones: lo emparejado, lo que el profe tiene que elegir y
-     quién no ha entregado. Devuelve los archivos de cada alumno, o null si cancela. */
+     quién no ha entregado. Devuelve { final: archivos de cada alumno, nuevos: alumnos que añadir }, o null si cancela. */
   let alResolverResumen = null;
   function confirmarEmparejado(emp, alumnos) {
     const legible = rs => (rs || []).some(r => LeerTrabajos.tipoArchivo(r));
@@ -2011,15 +2053,19 @@
       repetido: p => `Encaja con ${quienes(p)}, igual que otra entrega. ¿Cuál es la suya?`,
       desconocido: () => 'No encaja con nadie de la lista.',
     };
-    const opciones = (sugerido, candidatos) => {
-      const orden = [...candidatos, ...alumnos.map((_, i) => i).filter(i => !candidatos.includes(i))];
-      return `<option value="">No corregir</option>` + orden.map(i =>
-        `<option value="${i}"${i === sugerido ? ' selected' : ''}>${esc(alumnos[i].nombre)}</option>`).join('');
+    /* Lo que no encaja con nadie pero lleva un nombre de persona: se puede añadir a la lista */
+    const personaDe = p => p.motivo === 'desconocido' ? LeerTrabajos.nombresDeRutas(p.rutas)[0] ?? null : null;
+    const opciones = p => {
+      const orden = [...p.candidatos, ...alumnos.map((_, i) => i).filter(i => !p.candidatos.includes(i))];
+      const persona = personaDe(p);
+      const nuevo = persona ? `<option value="nuevo">➕ Añadir a ${esc(`${persona.nombre} ${persona.apellidos}`)} a la lista</option>` : '';
+      return `<option value="">No corregir</option>${nuevo}` + orden.map(i =>
+        `<option value="${i}"${i === p.sugerido ? ' selected' : ''}>${esc(alumnos[i].nombre)}</option>`).join('');
     };
     const revisar = emp.porRevisar.map((p, k) => `
       <div class="sin-identificar-item">
         <span class="que">📄 <strong>${esc(p.etiqueta)}</strong> · ${p.rutas.length} ${p.rutas.length === 1 ? 'archivo' : 'archivos'}<br><small>${esc(MOTIVOS[p.motivo](p))}</small></span>
-        <select data-revisar="${k}" aria-label="De quién es ${esc(p.etiqueta)}">${opciones(p.sugerido, p.candidatos)}</select>
+        <select data-revisar="${k}" aria-label="De quién es ${esc(p.etiqueta)}">${opciones(p)}</select>
       </div>`).join('');
     const sinEntrega = emp.sinEntrega.map(i => alumnos[i].nombre);
     abrirModal(`
@@ -2035,11 +2081,14 @@
         <button class="btn btn-primary btn-sm" id="btnConfirmarEmparejado">Corregir</button>
       </div>`);
 
-    const elecciones = () => Object.fromEntries([...document.querySelectorAll('[data-revisar]')]
-      .map(s => [emp.porRevisar[s.dataset.revisar].id, s.value === '' ? null : Number(s.value)]));
+    const selects = () => [...document.querySelectorAll('[data-revisar]')];
+    const elecciones = () => Object.fromEntries(selects()
+      .map(s => [emp.porRevisar[s.dataset.revisar].id, s.value === '' || s.value === 'nuevo' ? null : Number(s.value)]));
+    const nuevos = () => selects().filter(s => s.value === 'nuevo').map(s => emp.porRevisar[s.dataset.revisar])
+      .map(p => ({ ...personaDe(p), rutas: p.rutas }));
     const pintar = () => {
       const final = LeerTrabajos.resolverEntregas(emp, elecciones());
-      const conTrabajo = alumnos.filter((_, i) => legible(final[i])).length;
+      const conTrabajo = alumnos.filter((_, i) => legible(final[i])).length + nuevos().filter(n => legible(n.rutas)).length;
       const ilegibles = alumnos.filter((_, i) => final[i]?.length && !legible(final[i])).map(a => a.nombre);
       const saldo = perfil?.creditos;
       document.getElementById('resumenEmparejado').innerHTML =
@@ -2058,47 +2107,111 @@
       alResolverResumen = resolve;
       document.getElementById('btnConfirmarEmparejado').addEventListener('click', () => {
         const final = pintar();
+        const altas = nuevos();
         alResolverResumen = null;
         cerrarModal();
-        resolve(final);
+        resolve({ final, nuevos: altas });
       });
     });
   }
 
+  /* Grupo sin alumnos o sin Excel: la lista sale de los nombres de los trabajos. Con grupo se guarda en él. */
+  function crearListaDesdeTrabajos(rutas) {
+    const nombres = LeerTrabajos.nombresDeRutas(rutas);
+    if (!nombres.length) {
+      showToast('No encuentro nombres de alumnos en los archivos. Importa la lista en el Cuaderno o sube un Excel.', 'error');
+      return Promise.resolve(null);
+    }
+    const grupo = gruposCache.find(g => g.id === document.getElementById('selGrupo').value);
+    abrirModal(`
+      <h3>Tu lista de alumnos</h3>
+      <p class="resumen-ayuda">${grupo ? `«${esc(grupo.nombre)}» todavía no tiene alumnos.` : 'No hay lista de alumnos.'}
+        He encontrado ${nombres.length} en los trabajos. Desmarca lo que no sea un alumno.</p>
+      <div class="lista-nombres">${nombres.map((a, k) => `
+        <label class="interruptor"><input type="checkbox" data-nombre="${k}" checked><span>${esc(a.nombre)} ${esc(a.apellidos)}</span></label>`).join('')}</div>
+      ${grupo ? `<p class="resumen-ayuda">Se guardarán en el grupo para la próxima vez.</p>` : ''}
+      <div class="modal-actions">
+        <button class="btn btn-secondary btn-sm" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn btn-primary btn-sm" id="btnCrearLista">Seguir</button>
+      </div>`);
+    return new Promise(resolve => {
+      alResolverResumen = resolve;
+      document.getElementById('btnCrearLista').addEventListener('click', async () => {
+        const elegidos = [...document.querySelectorAll('[data-nombre]')].filter(c => c.checked).map(c => nombres[c.dataset.nombre]);
+        if (!elegidos.length) return showToast('Marca al menos un alumno', 'error');
+        alResolverResumen = null;
+        cerrarModal();
+        resolve(grupo ? await guardarAlumnos(grupo.id, elegidos) : elegidos.map(a => ({ nombre: `${a.nombre} ${a.apellidos}`.trim(), email: '' })));
+      });
+    });
+  }
+
+  /* Da de alta alumnos en el grupo del Corrector y devuelve la lista completa, o null si falla */
+  async function guardarAlumnos(grupoId, nuevos) {
+    const { data, error } = await sbClient.from('alumnos')
+      .insert(nuevos.map(a => ({ grupo_id: grupoId, nombre: a.nombre, apellidos: a.apellidos || null, activo: true })))
+      .select('id,nombre,apellidos,email');
+    if (error) { showToast('No se pudieron guardar los alumnos: ' + error.message, 'error'); return null; }
+    alumnosGrupoSel = [...alumnosGrupoSel, ...(data || []).map(a => ({
+      id: a.id, nombre: [a.nombre, a.apellidos].filter(Boolean).join(' '), email: a.email || '',
+    }))];
+    actualizarBadgeAlumnos();
+    return alumnosGrupoSel;
+  }
+
   async function corregirClase() {
     if (isProcessing) return;
-    const zipFile = document.getElementById('zipFile').files[0];
-    if (!zipFile && archivosEscaneo.length) return corregirEscaneo();
-    if (!zipFile) {
-      return showToast('Sube el ZIP con las entregas o el escaneo con pegatinas QR' +
-        (tareaSel() ? ', o pulsa «Corregir lo recibido»' : ''), 'error');
+    if (!trabajos.length) {
+      return showToast('Suelta los trabajos en «Trabajos de los alumnos»' + (tareaSel() ? ', o pulsa «Corregir lo recibido»' : ''), 'error');
     }
     const datos = datosFormulario();
     if (!datos) return;
-    const alumnos = await alumnosParaCorregir();
+    let alumnos = await alumnosParaCorregir();
     if (!alumnos) return;
 
-    let zip, rutas;
+    let fuente, rutas;
     try {
-      zip = await JSZip.loadAsync(zipFile);
-      rutas = filtrarPorTarea(
-        Object.keys(zip.files).filter(r => !zip.files[r].dir && LeerTrabajos.tipoArchivo(r) !== 'ignorar'),
-        datos.taskName);
+      fuente = await abrirTrabajos();
+      rutas = filtrarPorTarea([...fuente.keys()], datos.taskName);
     } catch (e) {
       return showToast('No se pudo abrir el ZIP: ' + e.message, 'error');
     }
-    if (!rutas.length) return showToast('El ZIP no tiene ningún archivo', 'error');
+    if (!rutas.length) return showToast('No hay ningún archivo', 'error');
 
-    const porAlumno = await confirmarEmparejado(LeerTrabajos.emparejarEntregas(rutas, alumnos, { tarea: datos.taskName }), alumnos);
-    if (!porAlumno) return;
+    let emp = alumnos.length ? LeerTrabajos.emparejarEntregas(rutas, alumnos, { tarea: datos.taskName }) : null;
+    // Ningún nombre encaja y son PDF o fotos: ¿libretas escaneadas con pegatina QR?
+    const conNombre = emp && (Object.keys(emp.asignados).length || emp.porRevisar.some(p => p.motivo !== 'desconocido'));
+    const soloPapel = rutas.every(r => ['pdf', 'imagen'].includes(LeerTrabajos.tipoArchivo(r)));
+    if (!conNombre && soloPapel && alumnosGrupoSel.length && document.getElementById('selGrupo').value) {
+      const archivos = await Promise.all(rutas.map(async r => fuente.get(r).file ?? new File([await fuente.get(r).uint8()], r.split('/').pop())));
+      if (await corregirEscaneo(archivos, datos)) return;
+    }
+    if (!alumnos.length) {
+      alumnos = await crearListaDesdeTrabajos(rutas);
+      if (!alumnos) return;
+      emp = LeerTrabajos.emparejarEntregas(rutas, alumnos, { tarea: datos.taskName });
+    }
+
+    const elegido = await confirmarEmparejado(emp, alumnos);
+    if (!elegido) return;
+    const porAlumno = elegido.final;
+    if (elegido.nuevos.length) {
+      // Alumnos que no estaban en la lista (alguien nuevo en clase): al grupo, o solo para esta corrección
+      const grupoId = document.getElementById('selGrupo').value;
+      const antes = alumnos.length;
+      const conDatos = grupoId ? await guardarAlumnos(grupoId, elegido.nuevos) : [...alumnos, ...elegido.nuevos.map(a => ({ nombre: `${a.nombre} ${a.apellidos}`.trim(), email: '' }))];
+      if (!conDatos) return;
+      alumnos = conDatos;
+      elegido.nuevos.forEach((n, k) => { porAlumno[antes + k] = n.rutas; });
+    }
     guardarRubricaEnTarea(datos.rubrica);
 
     await ejecutarCorreccion(alumnos.map((alumno, i) => ({
       alumno, result: null, estado: 'pendiente',
       corregir: async () => {
         const suyas = porAlumno[i] || [];
-        if (!suyas.length) throw errorTarjeta('Sin entrega', 'No hay ningún archivo de este alumno en el ZIP.', 'SIN_ENTREGA');
-        const { archivos, texto } = await leerEntregaZip(zip, suyas, alumno.nombre, alumnos.filter(a => a !== alumno).map(a => a.nombre));
+        if (!suyas.length) throw errorTarjeta('Sin entrega', 'No hay ningún archivo de este alumno.', 'SIN_ENTREGA');
+        const { archivos, texto } = await leerEntrega(fuente, suyas, alumno.nombre, alumnos.filter(a => a !== alumno).map(a => a.nombre));
         return api('corregir', {
           archivos, ...(texto ? { texto_tarea: texto } : {}),
           curso: datos.curso, nombre_tarea: datos.taskName, rubrica: datos.rubrica,
@@ -2496,14 +2609,9 @@
     return archivos;
   }
 
-  async function corregirEscaneo() {
-    if (!document.getElementById('selGrupo').value || !alumnosGrupoSel.length) {
-      return showToast('Para el escaneo con QR elige el grupo del cuaderno: las pegatinas son de sus alumnos.', 'error');
-    }
-    if (!tareaDestino()) return showToast('Elige la tarea del cuaderno (o crea una nueva)', 'error');
-    const datos = datosFormulario();
-    if (!datos) return;
-
+  /* Libretas escaneadas con pegatina QR. Devuelve false si no hay ninguna pegatina del grupo
+     (entonces corregirClase sigue como con cualquier otro archivo: el profe dice de quién es cada uno). */
+  async function corregirEscaneo(archivosEscaneo, datos) {
     isProcessing = true;
     const btn = document.getElementById('btnCorregir');
     btn.disabled = true;
@@ -2514,7 +2622,7 @@
       paginas = await leerPaginasEscaneo(archivosEscaneo, n => updateProgress(`Leyendo página ${n} y su pegatina…`, 0, 0));
     } catch (e) {
       showToast('No se pudo leer el escaneo: ' + e.message, 'error');
-      return;
+      return true;
     } finally {
       isProcessing = false;
       btn.disabled = false;
@@ -2525,9 +2633,10 @@
     const encontrados = alumnosGrupoSel.filter(a => porAlumno[a.id]);
     if (!encontrados.length) {
       updateProgress('', 0, 0);
-      return showToast('No he encontrado ninguna pegatina QR de este grupo. ¿Es el grupo correcto?', 'error');
+      document.getElementById('progressSection').classList.add('hidden');
+      return false;
     }
-    if (!confirmarCreditos(encontrados.length)) return;
+    if (!confirmarCreditos(encontrados.length)) return true;
     guardarRubricaEnTarea(datos.rubrica);
     if (sinPegatina) showToast(`${sinPegatina} ${sinPegatina === 1 ? 'página no tenía' : 'páginas no tenían'} pegatina delante y no se han corregido.`, 'warning');
 
