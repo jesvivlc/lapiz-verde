@@ -1868,6 +1868,10 @@
 
   const MAX_TEXTO = 38000;              // caracteres del texto de los documentos (la API admite 40.000)
   const MIN_BYTES_IMAGEN_DOC = 8 * 1024; // en un Word, lo más pequeño son iconos y adornos
+  const MAX_IMAGENES_DOC = 30;           // imágenes de un documento que se miran como mucho
+  const MAX_MB_DESCOMPRIMIDO = 40;       // un archivo que descomprimido ocupa más es sospechoso (bomba ZIP)
+  /* Tamaño descomprimido de un archivo de JSZip, sin descomprimirlo */
+  const tamanoMB = f => (f?._data?.uncompressedSize ?? 0) / 1024 / 1024;
 
   /* Texto e imágenes de un Word, PowerPoint, LibreOffice, HTML o .txt del ZIP */
   async function leerDocumento(zip, ruta, tipo) {
@@ -1882,27 +1886,33 @@
     if (tipo === 'docx') {
       const principal = Object.keys(doc.files).find(f => /^word\/document\d*\.xml$/.test(f));
       if (!principal) throw new Error('sin documento');
+      if (tamanoMB(doc.files[principal]) > MAX_MB_DESCOMPRIMIDO) throw new Error('demasiado grande');
       texto = LeerTrabajos.textoDeDocx(await leer(principal));
       media = 'word/media/';
     } else if (tipo === 'pptx') {
-      const diapos = Object.keys(doc.files).filter(f => /^ppt\/slides\/slide\d+\.xml$/.test(f)).sort((a, b) => numero(a) - numero(b));
+      const diapos = Object.keys(doc.files).filter(f => /^ppt\/slides\/slide\d+\.xml$/.test(f)).sort((a, b) => numero(a) - numero(b)).slice(0, 200);
+      if (diapos.reduce((t, f) => t + tamanoMB(doc.files[f]), 0) > MAX_MB_DESCOMPRIMIDO) throw new Error('demasiado grande');
       texto = LeerTrabajos.textoDePptx(await Promise.all(diapos.map(leer)));
       media = 'ppt/media/';
     } else {
       if (!doc.file('content.xml')) throw new Error('sin contenido');
+      if (tamanoMB(doc.files['content.xml']) > MAX_MB_DESCOMPRIMIDO) throw new Error('demasiado grande');
       texto = LeerTrabajos.textoDeOdf(await leer('content.xml'));
       media = 'Pictures/';
     }
+    // Sin descomprimir: fuera los adornos pequeños y lo enorme; como mucho MAX_IMAGENES_DOC
     const imagenes = Object.keys(doc.files)
       .filter(f => f.startsWith(media) && LeerTrabajos.tipoArchivo(f) === 'imagen')
-      .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
-      .map(f => doc.files[f]);
+      .map(f => doc.files[f])
+      .filter(f => tamanoMB(f) * 1024 * 1024 >= MIN_BYTES_IMAGEN_DOC && tamanoMB(f) <= MAX_MB_DESCOMPRIMIDO)
+      .sort((a, b) => a.name.localeCompare(b.name, 'es', { numeric: true }))
+      .slice(0, MAX_IMAGENES_DOC);
     return { texto, imagenes };
   }
 
   /* Lo de un alumno, de su última versión y en orden: PDF y fotos tal cual; de los documentos,
-     el texto (sin su nombre) y sus imágenes. Lo que no se sabe leer no gasta corrección. */
-  async function leerEntregaZip(zip, rutasAlumno, nombreAlumno) {
+     el texto (sin su nombre ni el de sus compañeros) y sus imágenes. Lo que no se sabe leer no gasta corrección. */
+  async function leerEntregaZip(zip, rutasAlumno, nombreAlumno, otrosNombres = []) {
     const ultima = Math.max(...rutasAlumno.map(versionNum));
     const rutas = rutasAlumno.filter(r => versionNum(r) === ultima)
       .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
@@ -1916,6 +1926,9 @@
     const cabe = a => archivos.length < MAX_PAGINAS && mb + a.sizeMB <= MAX_MB_ARCHIVO;
     for (const ruta of legibles) {
       const tipo = LeerTrabajos.tipoArchivo(ruta);
+      if (tamanoMB(zip.files[ruta]) > MAX_MB_DESCOMPRIMIDO) {
+        throw errorTarjeta('Archivo grande', `${ruta.split('/').pop()} es demasiado grande. Pídeselo en PDF comprimido. No ha gastado ninguna corrección.`);
+      }
       if (tipo === 'pdf' || tipo === 'imagen') {
         const a = await leerArchivoZip(zip, ruta);
         if (!cabe(a)) {
@@ -1931,13 +1944,14 @@
       let doc;
       try {
         doc = await leerDocumento(zip, ruta, tipo);
-      } catch (_) {
-        throw errorTarjeta('No se puede abrir', `${ruta.split('/').pop()} no se puede abrir (¿está dañado o protegido con contraseña?). Pídeselo en PDF. No ha gastado ninguna corrección.`);
+      } catch (e) {
+        const grande = e.message === 'demasiado grande';
+        throw errorTarjeta(grande ? 'Archivo grande' : 'No se puede abrir',
+          `${ruta.split('/').pop()} ${grande ? 'es demasiado grande' : 'no se puede abrir (¿está dañado o protegido con contraseña?)'}. Pídeselo en PDF. No ha gastado ninguna corrección.`);
       }
-      if (doc.texto) textos.push(doc.texto);
+      if (doc.texto) textos.push(doc.texto.slice(0, MAX_TEXTO));   // recortado antes de anonimizar: nada enorme
       for (const f of doc.imagenes) {
         const bytes = await f.async('uint8array');
-        if (bytes.length < MIN_BYTES_IMAGEN_DOC) continue;
         const ext = f.name.split('.').pop().toLowerCase();
         const img = await prepararImagen(new Blob([bytes], { type: ext === 'jpg' ? 'image/jpeg' : `image/${ext}` }));
         const a = { ...img, sizeMB: img.base64.length * 3 / 4 / 1024 / 1024 };
@@ -1951,7 +1965,7 @@
       const cuerpo = textos.length === 1 ? textos[0] : textos.map((t, n) => `Documento ${n + 1}:\n${t}`).join('\n\n');
       texto = '(Texto sacado de un documento: no se conserva el formato.' +
         (archivos.length ? ' Las imágenes del trabajo van a continuación.' : '') + ')\n\n' +
-        LeerTrabajos.anonimizar(cuerpo, nombreAlumno);
+        LeerTrabajos.anonimizar(cuerpo.slice(0, MAX_TEXTO), nombreAlumno, otrosNombres);
       if (texto.length > MAX_TEXTO) texto = texto.slice(0, MAX_TEXTO) + '\n\n[… el resto del texto se ha recortado por largo]';
     }
     if (!texto && !archivos.length) {
@@ -1968,6 +1982,7 @@
     const quienes = p => p.candidatos.map(i => alumnos[i].nombre).join(', ');
     const MOTIVOS = {
       parcial: p => `¿Es de ${quienes(p)}? El nombre no coincide del todo.`,
+      extra: p => `¿Es de ${quienes(p)}? En el nombre hay palabras de más: puede ser otra persona.`,
       varios: p => `Encaja con varios alumnos: ${quienes(p)}.`,
       repetido: p => `Encaja con ${quienes(p)}, igual que otra entrega. ¿Cuál es la suya?`,
       desconocido: () => 'No encaja con nadie de la lista.',
@@ -2059,7 +2074,7 @@
       corregir: async () => {
         const suyas = porAlumno[i] || [];
         if (!suyas.length) throw errorTarjeta('Sin entrega', 'No hay ningún archivo de este alumno en el ZIP.', 'SIN_ENTREGA');
-        const { archivos, texto } = await leerEntregaZip(zip, suyas, alumno.nombre);
+        const { archivos, texto } = await leerEntregaZip(zip, suyas, alumno.nombre, alumnos.filter(a => a !== alumno).map(a => a.nombre));
         return api('corregir', {
           archivos, ...(texto ? { texto_tarea: texto } : {}),
           curso: datos.curso, nombre_tarea: datos.taskName, rubrica: datos.rubrica,

@@ -28,6 +28,8 @@
     'foto fotos imagen img image pagina pag page hoja hojas parte trabajo tarea entrega scan escaneo ' +
     'escaneado documento doc docx pdf jpg jpeg png gif webp heic odt odp ods pptx ppt html htm txt rtf pages ' +
     'copia copy de del la el los las y final definitivo nuevo sin titulo untitled whatsapp camscanner').split(' '));
+  /* Partículas de nombres y apellidos («María de la Fuente»): no identifican a nadie por sí solas */
+  const PARTICULAS = new Set(['de', 'del', 'la', 'las', 'los', 'y', 'i', 'da', 'van', 'von', 'el']);
 
   /* ── Tipos de archivo ── */
   const TIPOS = {
@@ -72,7 +74,7 @@
   /**
    * Reparte `rutas` entre `alumnos` ([{ nombre }], el nombre completo).
    * Devuelve { asignados: { [índice]: rutas[] }, porRevisar: [{ id, etiqueta, rutas, sugerido, candidatos, motivo }], sinEntrega: [índices] }
-   *  - asignados: el nombre completo del alumno está en la ruta y no encaja mejor con nadie más.
+   *  - asignados: el nombre completo del alumno está en la ruta, sin palabras de más, y no encaja mejor con nadie.
    *  - porRevisar: a medias (sugerido), con varios alumnos, varias entregas distintas que encajan
    *    con el mismo alumno («Ana García» y en el ZIP «Ana García Pérez» y «Ana García López»), o con nadie.
    */
@@ -152,7 +154,13 @@
       porAlumno.get(g.alumno).push({ clave, g });
     }
     for (const [i, lista] of porAlumno) {
-      if (lista.length === 1) { asignados[i] = lista[0].g.rutas.slice(); continue; }
+      if (lista.length === 1 && !lista[0].g.resto) { asignados[i] = lista[0].g.rutas.slice(); continue; }
+      // En la ruta hay palabras de más («María López Martín» para «María López»): puede ser otra persona
+      if (lista.length === 1) {
+        const { clave, g } = lista[0];
+        porRevisar.push({ id: clave, etiqueta: g.etiqueta, rutas: g.rutas, motivo: 'extra', candidatos: [i], sugerido: i });
+        continue;
+      }
       const limpias = lista.filter(({ g }) => !g.resto);
       for (const { clave, g } of lista) {
         porRevisar.push({ id: clave, etiqueta: g.etiqueta, rutas: g.rutas, motivo: 'repetido', candidatos: [i],
@@ -184,10 +192,14 @@
 
   /* ══════════════════════════════════════
      Texto de documentos (XML dentro de un ZIP)
+     El alumno controla el documento: nada de expresiones regulares que puedan atascarse.
+     El XML se recorre una sola vez buscando «<» y «>» con indexOf.
   ══════════════════════════════════════ */
 
+  const MAX_XML = 8 * 1024 * 1024;   // caracteres de XML o HTML que se procesan como mucho
+
   function decodificar(s) {
-    return String(s).replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => {
+    return String(s).replace(/&(#x[0-9a-f]{1,6}|#\d{1,7}|[a-z]{2,6});/gi, (m, e) => {
       if (e[0] === '#') {
         const n = e[1].toLowerCase() === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
         return Number.isFinite(n) && n > 0 && n < 0x110000 ? String.fromCodePoint(n) : '';
@@ -196,73 +208,104 @@
     });
   }
 
+  /* Sin espacios al final de línea ni más de una línea en blanco seguida */
   function ordenar(texto) {
-    return String(texto).replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    const salida = [];
+    let blancas = 0;
+    for (const linea of String(texto).split('\n')) {
+      const l = linea.trimEnd();
+      blancas = l ? 0 : blancas + 1;
+      if (blancas < 2) salida.push(l);
+    }
+    return salida.join('\n').trim();
+  }
+
+  /** Recorre XML o HTML: alEtiqueta(nombre, cierre, sola, dentro) y alTexto(texto). Lineal. */
+  function recorrer(xml, alEtiqueta, alTexto) {
+    const s = String(xml).slice(0, MAX_XML);
+    let i = 0;
+    while (i < s.length) {
+      const a = s.indexOf('<', i);
+      if (a < 0) { alTexto(s.slice(i)); break; }
+      if (a > i) alTexto(s.slice(i, a));
+      if (s.startsWith('<!--', a)) {
+        const f = s.indexOf('-->', a + 4);
+        i = f < 0 ? s.length : f + 3;
+        continue;
+      }
+      const b = s.indexOf('>', a + 1);
+      if (b < 0) break;
+      const dentro = s.slice(a + 1, b);
+      const m = /^\/?\s*([^\s/>]+)/.exec(dentro);
+      if (m) alEtiqueta(m[1].toLowerCase(), dentro[0] === '/', dentro.endsWith('/'), dentro);
+      i = b + 1;
+    }
   }
 
   /** word/document.xml → texto. Solo <w:t> (lo escrito); lo borrado con control de cambios (<w:delText>) no cuenta */
   function textoDeDocx(xml) {
-    let salida = '', dentro = false;
-    const re = /<(\/?)(w:t|w:p|w:tab|w:br|w:cr|w:tc|w:tr)\b[^>]*?(\/?)>|([^<]+)|<[^>]*>/g;
-    let m;
-    while ((m = re.exec(xml))) {
-      const [, cierre, etiqueta, sola, texto] = m;
-      if (texto !== undefined) { if (dentro) salida += decodificar(texto); continue; }
-      if (!etiqueta) continue;
-      if (etiqueta === 'w:t') { dentro = !cierre && !sola; continue; }
-      if (etiqueta === 'w:tab' && !cierre) salida += '\t';
-      else if ((etiqueta === 'w:br' || etiqueta === 'w:cr') && !cierre) salida += '\n';
-      else if (etiqueta === 'w:p' && (cierre || sola)) salida += '\n';
-      else if (etiqueta === 'w:tc' && cierre) salida += '\t';
-      else if (etiqueta === 'w:tr' && cierre) salida += '\n';
-    }
-    return ordenar(salida);
+    const salida = [];
+    let dentro = false, enTabs = 0;
+    recorrer(xml, (n, cierre, sola) => {
+      if (n === 'w:t') { dentro = !cierre && !sola; return; }
+      if (n === 'w:tabs') { if (!sola) enTabs += cierre ? -1 : 1; return; }   // posiciones de tabulación, no tabuladores
+      if (enTabs > 0) return;
+      if (n === 'w:tab' && !cierre) salida.push('\t');
+      else if ((n === 'w:br' || n === 'w:cr') && !cierre) salida.push('\n');
+      else if (n === 'w:p' && (cierre || sola)) salida.push('\n');
+      else if (n === 'w:tc' && cierre) salida.push('\t');
+      else if (n === 'w:tr' && cierre) salida.push('\n');
+    }, t => { if (dentro) salida.push(decodificar(t)); });
+    return ordenar(salida.join(''));
   }
 
   /** [xml de cada diapositiva, en orden] → texto, con «Diapositiva N» delante */
   function textoDePptx(diapositivas) {
-    return ordenar(diapositivas.map((xml, n) => {
-      let salida = '', dentro = false;
-      const re = /<(\/?)(a:t|a:p|a:br)\b[^>]*?(\/?)>|([^<]+)|<[^>]*>/g;
-      let m;
-      while ((m = re.exec(xml))) {
-        const [, cierre, etiqueta, sola, texto] = m;
-        if (texto !== undefined) { if (dentro) salida += decodificar(texto); continue; }
-        if (!etiqueta) continue;
-        if (etiqueta === 'a:t') dentro = !cierre && !sola;
-        else if (etiqueta === 'a:br' && !cierre) salida += '\n';
-        else if (etiqueta === 'a:p' && (cierre || sola)) salida += '\n';
-      }
-      return `Diapositiva ${n + 1}:\n${ordenar(salida)}`;
+    return ordenar(diapositivas.map((xml, k) => {
+      const salida = [];
+      let dentro = false;
+      recorrer(xml, (n, cierre, sola) => {
+        if (n === 'a:t') dentro = !cierre && !sola;
+        else if (n === 'a:br' && !cierre) salida.push('\n');
+        else if (n === 'a:p' && (cierre || sola)) salida.push('\n');
+      }, t => { if (dentro) salida.push(decodificar(t)); });
+      return `Diapositiva ${k + 1}:\n${ordenar(salida.join(''))}`;
     }).join('\n\n'));
   }
 
-  /** content.xml de LibreOffice (Writer o Impress) → texto. Sin comentarios ni cambios rechazados */
+  /** content.xml de LibreOffice (Writer o Impress) → texto. Sin comentarios, estilos ni cambios rechazados */
+  const ODF_FUERA = new Set(['office:annotation', 'text:tracked-changes', 'office:automatic-styles', 'office:font-face-decls', 'office:styles']);
   function textoDeOdf(xml) {
-    const cuerpo = String(xml)
-      .replace(/<office:annotation\b[\s\S]*?<\/office:annotation>/g, '')
-      .replace(/<text:tracked-changes\b[\s\S]*?<\/text:tracked-changes>/g, '')
-      .replace(/<office:automatic-styles\b[\s\S]*?<\/office:automatic-styles>/g, '')
-      .replace(/<text:s\b[^>]*?text:c="(\d+)"[^>]*\/>/g, (_, n) => ' '.repeat(Math.min(Number(n), 20)))
-      .replace(/<text:s\b[^>]*\/>/g, ' ')
-      .replace(/<text:tab\b[^>]*\/>/g, '\t')
-      .replace(/<text:line-break\b[^>]*\/>/g, '\n')
-      .replace(/<\/(text:p|text:h|draw:page|table:table-row)>/g, '\n')
-      .replace(/<\/table:table-cell>/g, '\t')
-      .replace(/<[^>]+>/g, '');
-    return ordenar(decodificar(cuerpo));
+    const salida = [];
+    let fuera = 0;
+    recorrer(xml, (n, cierre, sola, dentro) => {
+      if (ODF_FUERA.has(n)) { if (!sola) fuera = Math.max(0, fuera + (cierre ? -1 : 1)); return; }
+      if (fuera) return;
+      if (n === 'text:s' && !cierre) {
+        const c = /text:c="(\d{1,4})"/.exec(dentro);
+        salida.push(' '.repeat(Math.min(c ? Number(c[1]) : 1, 20)));
+      } else if (n === 'text:tab' && !cierre) salida.push('\t');
+      else if (n === 'text:line-break' && !cierre) salida.push('\n');
+      else if ((n === 'text:p' || n === 'text:h' || n === 'draw:page' || n === 'table:table-row') && (cierre || sola)) salida.push('\n');
+      else if (n === 'table:table-cell' && cierre) salida.push('\t');
+    }, t => { if (!fuera) salida.push(decodificar(t)); });
+    return ordenar(salida.join(''));
   }
 
   /** HTML (texto en línea de Moodle, páginas guardadas) → texto */
+  const HTML_FUERA = new Set(['script', 'style', 'head', 'template']);
+  const HTML_SALTO = new Set(['p', 'div', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'tr', 'blockquote', 'pre']);
   function textoDeHtml(html) {
-    const cuerpo = String(html)
-      .replace(/<(script|style|head)\b[\s\S]*?<\/\1>/gi, '')
-      .replace(/<!--[\s\S]*?-->/g, '')
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/(p|div|li|h[1-6]|tr|blockquote|pre)>/gi, '\n')
-      .replace(/<\/t[dh]>/gi, '\t')
-      .replace(/<[^>]+>/g, '');
-    return ordenar(decodificar(cuerpo));
+    const salida = [];
+    let fuera = 0;
+    recorrer(html, (n, cierre, sola) => {
+      if (HTML_FUERA.has(n)) { if (!sola) fuera = Math.max(0, fuera + (cierre ? -1 : 1)); return; }
+      if (fuera) return;
+      if (n === 'br') salida.push('\n');
+      else if (cierre && HTML_SALTO.has(n)) salida.push('\n');
+      else if (cierre && (n === 'td' || n === 'th')) salida.push('\t');
+    }, t => { if (!fuera) salida.push(decodificar(t)); });
+    return ordenar(salida.join(''));
   }
 
   /* ══════════════════════════════════════
@@ -270,30 +313,63 @@
   ══════════════════════════════════════ */
 
   const MARCA = '[nombre del alumno]';
+  /* Líneas de cabecera: «Nombre:», «Nombre y apellidos:», «Nom i cognoms:», «Alumno/a:», «Fdo.:»… */
+  const CABECERA = /^([ \t]*(?:nombre|nom|apellidos?|cognoms?|alumn[oae]s?|estudiante?|autor[a]?|autores|fdo|firmado|firma|signat)\b[^\n:]{0,40}:[ \t]*).*$/gim;
 
-  /** Quita del texto las líneas «Nombre: …» y cualquier secuencia de 2 o más palabras de su nombre */
-  function anonimizar(texto, nombre) {
-    let t = String(texto ?? '');
-    t = t.replace(/^([ \t]*(?:nombre(?: y apellidos)?|apellidos|alumno|alumna|alumno\/a|estudiante)[ \t]*[:.\-][ \t]*).*$/gim, `$1${MARCA}`);
-    const suyas = new Set(palabras(nombre).filter(p => p.length > 2));
-    if (!suyas.size) return t;
-    // Secuencias de 2 o más palabras de su nombre (con espacios, comas o guiones entre ellas), y hasta
-    // 2 palabras en mayúscula justo detrás: en la lista pone «Ana García» y ella firma «Ana García Pérez»
-    return t.replace(/[\p{L}][\p{L}'’]*(?:[ \t,.\-]+[\p{L}][\p{L}'’]*)+/gu, trozo => {
-      const ps = trozo.split(/([ \t,.\-]+)/);   // palabra, separador, palabra…
-      const esSuya = k => suyas.has(norm(ps[k]));
-      let salida = '', k = 0;
-      while (k < ps.length) {
-        if (k % 2 === 1 || !esSuya(k)) { salida += ps[k]; k++; continue; }
-        let fin = k, n = 1;
-        while (fin + 2 < ps.length && esSuya(fin + 2)) { fin += 2; n++; }
-        if (n < 2) { salida += ps[k]; k++; continue; }
-        for (let extra = 0; extra < 2 && fin + 2 < ps.length && /^[ \t]+$/.test(ps[fin + 1]) && /^\p{Lu}/u.test(ps[fin + 2]); extra++) fin += 2;
-        salida += MARCA;
-        k = fin + 1;
-      }
-      return salida;
+  function palabrasDeNombre(nombre) {
+    return String(nombre ?? '').split(/[^\p{L}\p{N}]+/u).map(norm).filter(p => p.length >= 2 && !PARTICULAS.has(p));
+  }
+
+  /**
+   * Quita del texto el nombre del alumno: las líneas de cabecera («Nombre: …»), cualquier palabra
+   * de su nombre (también suelta: «Me llamo Lucía»), hasta 2 palabras en mayúscula justo detrás
+   * (sus apellidos aunque la lista no los tenga) y los nombres completos de compañeros (`otros`).
+   * Tapa de más antes que de menos: el profe ve el trabajo original.
+   */
+  function anonimizar(texto, nombre, otros = []) {
+    const t = String(texto ?? '').replace(CABECERA, `$1${MARCA}`);
+    const suyas = new Set(palabrasDeNombre(nombre));
+    const deOtros = new Set(otros.flatMap(palabrasDeNombre));
+    if (!suyas.size && !deOtros.size) return t;
+    const ps = t.split(/([^\p{L}\p{N}'’]+)/u);   // palabra, separador, palabra…
+    const tipo = ps.map((p, k) => {
+      if (k % 2 || !p) return '';
+      const partes = norm(p).split(/['’]/);
+      if (partes.some(x => suyas.has(x))) return 'suya';
+      return partes.some(x => deOtros.has(x)) ? 'otro' : '';
     });
+    const junto = sep => sep.length <= 3 && /^[ \t,.\-]+$/.test(sep);
+    const tapar = ps.map((_, k) => tipo[k] === 'suya');
+    // Dos o más palabras de nombres seguidas (también de compañeros: «con Pedro Sanz»)
+    for (let k = 0; k + 2 < ps.length; k += 2) {
+      if (tipo[k] && tipo[k + 2] && junto(ps[k + 1])) tapar[k] = tapar[k + 2] = true;
+    }
+    // Apellidos que no están en la lista: hasta 2 palabras en mayúscula justo detrás
+    const antes = tapar.slice();
+    for (let k = 0; k < ps.length; k += 2) {
+      if (!antes[k] || antes[k + 2]) continue;
+      for (let j = k, extra = 0; extra < 2 && j + 2 < ps.length && /^[ \t]+$/.test(ps[j + 1]) && /^\p{Lu}/u.test(ps[j + 2]); extra++) {
+        j += 2;
+        tapar[j] = true;
+      }
+    }
+    // «María de la Fuente»: las partículas entre dos palabras tapadas, también
+    for (let k = 0; k < ps.length; k += 2) {
+      if (!tapar[k]) continue;
+      let j = k + 2;
+      while (j < ps.length && j - k <= 6 && !tapar[j] && PARTICULAS.has(norm(ps[j])) && junto(ps[j - 1])) j += 2;
+      if (j > k + 2 && j < ps.length && tapar[j] && junto(ps[j - 1])) for (let x = k + 2; x < j; x += 2) tapar[x] = true;
+    }
+    let salida = '';
+    for (let k = 0; k < ps.length; k++) {
+      if (k % 2 === 0 && tapar[k]) {
+        while (k + 2 < ps.length && tapar[k + 2] && /^[ \t,]{1,3}$/.test(ps[k + 1])) k += 2;
+        salida += MARCA;
+      } else {
+        salida += ps[k];
+      }
+    }
+    return salida;
   }
 
   global.LeerTrabajos = {

@@ -103,6 +103,34 @@ console.log('== Emparejar: nunca da a un alumno el trabajo de otro ==');
     'dos entregas distintas del mismo alumno: el profe confirma');
 }
 
+{
+  // Palabras de más en el nombre de la ruta: puede ser otra persona
+  const alumnos = [{ nombre: 'María López' }];
+  const r = emparejarEntregas(['María López Martín_4_assignsubmission_file_/a.pdf'], alumnos);
+  ok(!r.asignados[0] && r.porRevisar[0]?.motivo === 'extra' && r.porRevisar[0].sugerido === 0, '«María López Martín» para «María López»: a revisar, con la sugerencia');
+  const d = emparejarEntregas(['Comentario de Ana sobre García Lorca.docx'], [{ nombre: 'Ana García' }]);
+  ok(!d.asignados[0] && d.porRevisar[0]?.motivo === 'extra', 'un archivo que menciona el nombre en otra frase no se da por hecho');
+}
+
+console.log('== Documentos manipulados: no atascan la página ==');
+{
+  const medir = fn => { const t = Date.now(); fn(); return Date.now() - t; };
+  const n = 2_000_000;
+  const casos = [
+    ['espacios sin salto', () => textoDeDocx('<w:t>' + ' '.repeat(n) + 'x</w:t>')],
+    ['etiquetas sin cerrar', () => textoDeDocx('<w:t'.repeat(n / 4))],
+    ['comentarios sin cerrar', () => textoDeOdf('<office:annotation>'.repeat(n / 20))],
+    ['HTML con scripts sin cerrar', () => textoDeHtml('<script>'.repeat(n / 8) + '<!--'.repeat(1000))],
+    ['espacios en LibreOffice', () => textoDeOdf('<text:s ' + 'a'.repeat(n) + '/>')],
+    ['una palabra larguísima', () => anonimizar('a'.repeat(n), 'Ana García')],
+    ['muchas palabras', () => anonimizar('Ana García '.repeat(n / 10), 'Ana García')],
+  ];
+  for (const [nombre, fn] of casos) {
+    const ms = medir(fn);
+    ok(ms < 1500, `${nombre}: ${ms} ms`);
+  }
+}
+
 console.log('== Texto de Word ==');
 {
   const xml = '<?xml version="1.0"?><w:document xmlns:w="x"><w:body>' +
@@ -149,11 +177,20 @@ console.log('== Anonimizar ==');
   ok(!/López/.test(a), 'no queda ningún apellido junto al nombre');
   ok(a.startsWith(`Nombre: ${MARCA}\nCurso: 3.º ESO`), 'la línea «Nombre:» se vacía y el resto se respeta');
   ok(a.includes(`Me llamo ${MARCA} y este verano`), 'secuencias de nombre y apellido en medio del texto');
-  ok(a.includes('García Márquez') && a.includes('Ana fue a la playa'), 'una palabra suelta que coincide no se toca (no destroza el texto)');
+  ok(!a.includes('García') && a.includes(`${MARCA} fue a la playa`), 'también las palabras sueltas de su nombre: tapa de más antes que de menos');
   ok(a.endsWith(`APELLIDOS: ${MARCA}`), 'también en mayúsculas');
   ok(anonimizar('López, Ana: redacción', 'Ana López') === `${MARCA}: redacción`, 'formato «Apellidos, Nombre»');
   ok(anonimizar('Soy Ana García Pérez y tengo 14 años. Ana García. Fin', 'Ana García') === `Soy ${MARCA} y tengo 14 años. ${MARCA}. Fin`,
     'en la lista pone menos apellidos que en el trabajo: también se tapan');
+  ok(anonimizar('Me llamo Lucía y me gusta leer. Hecho por Lucía', 'Lucía Martín') === `Me llamo ${MARCA} y me gusta leer. Hecho por ${MARCA}`, 'el nombre de pila, suelto');
+  ok(anonimizar('Trabajo de Li Wang', 'Li Wang') === `Trabajo de ${MARCA}`, 'nombres de dos letras');
+  ok(anonimizar('Autor: x\nŁukasz Nowak escribe', 'Łukasz Nowak') === `Autor: ${MARCA}\n${MARCA} escribe`, 'letras de otros alfabetos (ł)');
+  ok(anonimizar("Soy Marco D'Angelo", "Marco D'Angelo") === `Soy ${MARCA}`, 'apellidos con apóstrofo');
+  ok(anonimizar('Ana\nGarcía\n\nEl texto', 'Ana García') === `${MARCA}\n${MARCA}\n\nEl texto`, 'nombre y apellido en líneas distintas');
+  ok(anonimizar('Nom i cognoms: Pau Ferrer\nNombre del alumno: Pau Ferrer', 'Pau Ferrer').split(MARCA).length === 3, 'cabeceras en valenciano y «Nombre del alumno:»');
+  ok(anonimizar('María de la Fuente vive en la playa', 'María de la Fuente') === `${MARCA} vive en la playa`, 'las partículas («de la») no se tapan sueltas');
+  const grupo = anonimizar('Lo hice con Pedro Sanz y con Pedro', 'Ana García', ['Pedro Sanz Ruiz']);
+  ok(grupo === `Lo hice con ${MARCA} y con Pedro`, 'nombre completo de un compañero (trabajo en grupo)');
 }
 
 console.log(fallos ? `\n${fallos} prueba(s) fallida(s)` : '\nTodas las pruebas de leer-trabajos pasan');

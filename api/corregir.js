@@ -31,8 +31,11 @@ function trabajoDelCuerpo(body) {
       throw new ErrorHttp(400, `El campo "tipo_archivo" debe ser uno de: ${TIPOS_ARCHIVO_VALIDOS.join(', ')}`);
     }
   }
+  if (texto_tarea !== undefined && texto_tarea !== null && typeof texto_tarea !== 'string') {
+    throw new ErrorHttp(400, 'El campo "texto_tarea" debe ser texto.');
+  }
   const bloques = [];
-  if (texto_tarea && String(texto_tarea).trim() !== '') bloques.push({ type: 'text', text: String(texto_tarea) });
+  if (texto_tarea && texto_tarea.trim() !== '') bloques.push({ type: 'text', text: texto_tarea });
   bloques.push(...archivos.map((a) => bloqueDeArchivo(a.base64, a.tipo)));
   if (!bloques.length) throw new ErrorHttp(400, 'Debes enviar texto_tarea o archivo_base64 (con tipo_archivo).');
   return bloques;

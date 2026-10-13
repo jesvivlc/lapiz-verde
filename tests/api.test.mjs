@@ -273,6 +273,9 @@ ok(res.statusCode === 200 && contWord.length === 4 && contWord[2].text === 'Text
 reiniciar(); res = respuesta();
 await corregir(peticion({ body: { ...base, texto_tarea: 'x', archivos: [{ base64: 'AAAA', tipo: 'docx' }] } }), res);
 ok(res.statusCode === 400 && estado.creditos === 5, 'texto con un archivo de tipo no admitido → 400 sin cobrar');
+reiniciar(); res = respuesta();
+await corregir(peticion({ body: { ...base, texto_tarea: { trampa: 1 } } }), res);
+ok(res.statusCode === 400 && estado.creditos === 5, 'texto_tarea que no es texto → 400 sin cobrar');
 
 console.log('== /api/entrega (enlace para alumnos, sin cuenta) ==');
 const { default: entrega, etiquetasAlumnos } = await import('../api/entrega.js');
