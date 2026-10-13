@@ -324,6 +324,15 @@ console.log('== Word, LibreOffice y alumnos que se confunden ==');
   ok(tarjetas.includes('Formato que no sé leer') && tarjetas.includes('redaccion.doc'), 'la tarjeta de Marta explica qué pasa con su archivo');
   ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
 
+  const tope = await page.evaluate(async () => {
+    const z = new JSZip(); z.file('word/document.xml', 'a'.repeat(200000));
+    const doc = await JSZip.loadAsync(await z.generateAsync({ type: 'uint8array' }));
+    const corta = await leerConTope(doc.file('word/document.xml'), 0.05).then(() => 'leído', e => e.message);
+    const entero = (await leerConTope(doc.file('word/document.xml'), 1)).length;
+    return { corta, entero };
+  });
+  ok(tope.corta === 'demasiado grande' && tope.entero === 200000, 'lo de dentro de un Word se descomprime por partes y se corta al pasar el tope');
+
   // Cancelar el resumen no corrige nada
   correcciones.length = 0;
   await page.click('#btnCorregir');

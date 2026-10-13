@@ -184,13 +184,16 @@ console.log('== Anonimizar ==');
     'en la lista pone menos apellidos que en el trabajo: también se tapan');
   ok(anonimizar('Me llamo Lucía y me gusta leer. Hecho por Lucía', 'Lucía Martín') === `Me llamo ${MARCA} y me gusta leer. Hecho por ${MARCA}`, 'el nombre de pila, suelto');
   ok(anonimizar('Trabajo de Li Wang', 'Li Wang') === `Trabajo de ${MARCA}`, 'nombres de dos letras');
-  ok(anonimizar('Autor: x\nŁukasz Nowak escribe', 'Łukasz Nowak') === `Autor: ${MARCA}\n${MARCA} escribe`, 'letras de otros alfabetos (ł)');
+  ok(anonimizar('Nombre: x\nŁukasz Nowak escribe', 'Łukasz Nowak') === `Nombre: ${MARCA}\n${MARCA} escribe`, 'letras de otros alfabetos (ł)');
   ok(anonimizar("Soy Marco D'Angelo", "Marco D'Angelo") === `Soy ${MARCA}`, 'apellidos con apóstrofo');
   ok(anonimizar('Ana\nGarcía\n\nEl texto', 'Ana García') === `${MARCA}\n${MARCA}\n\nEl texto`, 'nombre y apellido en líneas distintas');
   ok(anonimizar('Nom i cognoms: Pau Ferrer\nNombre del alumno: Pau Ferrer', 'Pau Ferrer').split(MARCA).length === 3, 'cabeceras en valenciano y «Nombre del alumno:»');
   ok(anonimizar('María de la Fuente vive en la playa', 'María de la Fuente') === `${MARCA} vive en la playa`, 'las partículas («de la») no se tapan sueltas');
   const grupo = anonimizar('Lo hice con Pedro Sanz y con Pedro', 'Ana García', ['Pedro Sanz Ruiz']);
-  ok(grupo === `Lo hice con ${MARCA} y con Pedro`, 'nombre completo de un compañero (trabajo en grupo)');
+  ok(grupo === `Lo hice con ${MARCA} y con ${MARCA}`, 'compañeros (trabajo en grupo): nombre completo, o suelto en mitad de la frase');
+  ok(anonimizar('Mi perro y su gato. Su casa', 'Su Lin') === `Mi perro y su gato. ${MARCA} casa`, 'una palabra corriente en minúscula no se tapa aunque sea su nombre');
+  ok(anonimizar('ana garcía escribió esto', 'Ana García') === `${MARCA} escribió esto`, 'el nombre completo en minúsculas, también');
+  ok(anonimizar('Autor: Miguel de Cervantes', 'Ana García') === 'Autor: Miguel de Cervantes', '«Autor:» en un trabajo de literatura no se toca');
 }
 
 console.log(fallos ? `\n${fallos} prueba(s) fallida(s)` : '\nTodas las pruebas de leer-trabajos pasan');

@@ -314,7 +314,7 @@
 
   const MARCA = '[nombre del alumno]';
   /* Líneas de cabecera: «Nombre:», «Nombre y apellidos:», «Nom i cognoms:», «Alumno/a:», «Fdo.:»… */
-  const CABECERA = /^([ \t]*(?:nombre|nom|apellidos?|cognoms?|alumn[oae]s?|estudiante?|autor[a]?|autores|fdo|firmado|firma|signat)\b[^\n:]{0,40}:[ \t]*).*$/gim;
+  const CABECERA = /^([ \t]*(?:nombre|nom|apellidos?|cognoms?|alumn[oae]s?|estudiante?|fdo|firmado|firma|signat)\b[^\n:]{0,40}:[ \t]*).*$/gim;
 
   function palabrasDeNombre(nombre) {
     return String(nombre ?? '').split(/[^\p{L}\p{N}]+/u).map(norm).filter(p => p.length >= 2 && !PARTICULAS.has(p));
@@ -322,8 +322,10 @@
 
   /**
    * Quita del texto el nombre del alumno: las líneas de cabecera («Nombre: …»), cualquier palabra
-   * de su nombre (también suelta: «Me llamo Lucía»), hasta 2 palabras en mayúscula justo detrás
-   * (sus apellidos aunque la lista no los tenga) y los nombres completos de compañeros (`otros`).
+   * de su nombre escrita en mayúscula (también suelta: «Me llamo Lucía»; «su» o «mar» en minúscula
+   * no, para no estropear el texto), dos o más palabras de nombres seguidas en cualquier forma, hasta
+   * 2 palabras en mayúscula justo detrás (sus apellidos aunque la lista no los tenga) y los nombres
+   * de compañeros (`otros`): seguidos, o sueltos en mayúscula en mitad de una frase.
    * Tapa de más antes que de menos: el profe ve el trabajo original.
    */
   function anonimizar(texto, nombre, otros = []) {
@@ -338,8 +340,10 @@
       if (partes.some(x => suyas.has(x))) return 'suya';
       return partes.some(x => deOtros.has(x)) ? 'otro' : '';
     });
-    const junto = sep => sep.length <= 3 && /^[ \t,.\-]+$/.test(sep);
-    const tapar = ps.map((_, k) => tipo[k] === 'suya');
+    const junto = sep => sep.length <= 3 && /^[ \t,.\-\n]+$/.test(sep);
+    const mayuscula = k => /^\p{Lu}/u.test(ps[k]);
+    const enMitadDeFrase = k => k > 0 && !/[.!?:\n]/.test(ps[k - 1]);
+    const tapar = ps.map((_, k) => (tipo[k] === 'suya' && mayuscula(k)) || (tipo[k] === 'otro' && mayuscula(k) && enMitadDeFrase(k)));
     // Dos o más palabras de nombres seguidas (también de compañeros: «con Pedro Sanz»)
     for (let k = 0; k + 2 < ps.length; k += 2) {
       if (tipo[k] && tipo[k + 2] && junto(ps[k + 1])) tapar[k] = tapar[k + 2] = true;

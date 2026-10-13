@@ -13,6 +13,7 @@ const client = new Anthropic();
 
 // Límites para que una sola corrección no cueste mucho más de lo que se cobra
 const LIMITES = { nombre_tarea: 200, rubrica: 6000, texto_tarea: 40000 };
+const MAX_TEXTO_CON_ARCHIVOS = 20000;
 
 /** Bloques del trabajo a partir del cuerpo: `texto_tarea` (p. ej. el texto de un Word) y/o
     `archivos` (varios: PDF, fotos o las imágenes de ese Word) o `archivo_base64` (uno) */
@@ -33,6 +34,10 @@ function trabajoDelCuerpo(body) {
   }
   if (texto_tarea !== undefined && texto_tarea !== null && typeof texto_tarea !== 'string') {
     throw new ErrorHttp(400, 'El campo "texto_tarea" debe ser texto.');
+  }
+  // Texto y archivos en la misma corrección (un Word con imágenes): presupuesto conjunto
+  if (archivos.length && texto_tarea && texto_tarea.length > MAX_TEXTO_CON_ARCHIVOS) {
+    throw new ErrorHttp(400, `Con archivos, el texto puede tener como máximo ${MAX_TEXTO_CON_ARCHIVOS} caracteres.`);
   }
   const bloques = [];
   if (texto_tarea && texto_tarea.trim() !== '') bloques.push({ type: 'text', text: texto_tarea });

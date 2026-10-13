@@ -276,6 +276,9 @@ ok(res.statusCode === 400 && estado.creditos === 5, 'texto con un archivo de tip
 reiniciar(); res = respuesta();
 await corregir(peticion({ body: { ...base, texto_tarea: { trampa: 1 } } }), res);
 ok(res.statusCode === 400 && estado.creditos === 5, 'texto_tarea que no es texto → 400 sin cobrar');
+reiniciar(); res = respuesta();
+await corregir(peticion({ body: { ...base, texto_tarea: 'x'.repeat(20001), archivos: [{ base64: 'AAAA', tipo: 'png' }] } }), res);
+ok(res.statusCode === 400 && estado.creditos === 5, 'texto largo y archivos a la vez → 400 sin cobrar (presupuesto conjunto)');
 
 console.log('== /api/entrega (enlace para alumnos, sin cuenta) ==');
 const { default: entrega, etiquetasAlumnos } = await import('../api/entrega.js');

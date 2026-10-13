@@ -1867,11 +1867,33 @@
   ══════════════════════════════════════ */
 
   const MAX_TEXTO = 38000;              // caracteres del texto de los documentos (la API admite 40.000)
+  const MAX_TEXTO_CON_IMAGENES = 19000;  // si además van imágenes (la API admite 20.000)
   const MIN_BYTES_IMAGEN_DOC = 8 * 1024; // en un Word, lo más pequeño son iconos y adornos
   const MAX_IMAGENES_DOC = 30;           // imágenes de un documento que se miran como mucho
   const MAX_MB_DESCOMPRIMIDO = 40;       // un archivo que descomprimido ocupa más es sospechoso (bomba ZIP)
-  /* Tamaño descomprimido de un archivo de JSZip, sin descomprimirlo */
+  /* Tamaño descomprimido de un archivo de JSZip, sin descomprimirlo (lo que declara el propio ZIP) */
   const tamanoMB = f => (f?._data?.uncompressedSize ?? 0) / 1024 / 1024;
+  /* Descomprime sin fiarse de lo que declara el archivo (dentro de un Word lo controla el alumno):
+     se lee por partes y se corta al pasar el tope */
+  function leerConTope(f, maxMB = MAX_MB_DESCOMPRIMIDO) {
+    return new Promise((resolver, fallar) => {
+      const max = maxMB * 1024 * 1024, trozos = [];
+      let total = 0, cortado = false;
+      const flujo = f.internalStream('uint8array');
+      flujo.on('data', d => {
+        if (cortado) return;
+        total += d.length;
+        if (total > max) { cortado = true; flujo.pause(); fallar(new Error('demasiado grande')); return; }
+        trozos.push(d);
+      }).on('error', fallar).on('end', () => {
+        if (cortado) return;
+        const todo = new Uint8Array(total);
+        let o = 0;
+        for (const t of trozos) { todo.set(t, o); o += t.length; }
+        resolver(todo);
+      }).resume();
+    });
+  }
 
   /* Texto e imágenes de un Word, PowerPoint, LibreOffice, HTML o .txt del ZIP */
   async function leerDocumento(zip, ruta, tipo) {
@@ -1880,7 +1902,7 @@
       return { texto: tipo === 'html' ? LeerTrabajos.textoDeHtml(crudo) : crudo.trim(), imagenes: [] };
     }
     const doc = await JSZip.loadAsync(await zip.files[ruta].async('uint8array'));
-    const leer = f => doc.file(f).async('string');
+    const leer = async f => new TextDecoder().decode(await leerConTope(doc.file(f)));
     const numero = f => parseInt((f.match(/(\d+)\.xml$/) || [])[1] || '0', 10);
     let texto, media;
     if (tipo === 'docx') {
@@ -1951,7 +1973,8 @@
       }
       if (doc.texto) textos.push(doc.texto.slice(0, MAX_TEXTO));   // recortado antes de anonimizar: nada enorme
       for (const f of doc.imagenes) {
-        const bytes = await f.async('uint8array');
+        let bytes;
+        try { bytes = await leerConTope(f); } catch (_) { continue; }
         const ext = f.name.split('.').pop().toLowerCase();
         const img = await prepararImagen(new Blob([bytes], { type: ext === 'jpg' ? 'image/jpeg' : `image/${ext}` }));
         const a = { ...img, sizeMB: img.base64.length * 3 / 4 / 1024 / 1024 };
@@ -1966,7 +1989,8 @@
       texto = '(Texto sacado de un documento: no se conserva el formato.' +
         (archivos.length ? ' Las imágenes del trabajo van a continuación.' : '') + ')\n\n' +
         LeerTrabajos.anonimizar(cuerpo.slice(0, MAX_TEXTO), nombreAlumno, otrosNombres);
-      if (texto.length > MAX_TEXTO) texto = texto.slice(0, MAX_TEXTO) + '\n\n[… el resto del texto se ha recortado por largo]';
+      const maximo = archivos.length ? MAX_TEXTO_CON_IMAGENES : MAX_TEXTO;
+      if (texto.length > maximo) texto = texto.slice(0, maximo) + '\n\n[… el resto del texto se ha recortado por largo]';
     }
     if (!texto && !archivos.length) {
       throw errorTarjeta('Documento vacío', 'No he encontrado texto ni imágenes en su entrega. Ábrela tú y, si hace falta, pídesela en PDF. No ha gastado ninguna corrección.');
