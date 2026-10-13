@@ -208,5 +208,85 @@
     }).join('\n');
   }
 
-  global.PasarNotas = { norm, palabras, nombraA, emparejar, elegirFilas, textoComentario, comentarioHtml, leerCsv, escribirCsv, rellenarHojaMoodle, tablaParaCopiar };
+  /* ── Exportar el cuaderno a Excel ── */
+  /* Un texto que empieza por = + - @ se volvería fórmula si la hoja se edita o se guarda como CSV */
+  function sinFormula(v) {
+    return typeof v === 'string' ? v.replace(/^[=+\-@\t\r]/, "'$&") : v;
+  }
+  function nombreEvaluacion(e) {
+    return /^\d$/.test(String(e)) ? `${e}.ª evaluación` : String(e);
+  }
+  function redondear(n) {
+    return Math.round(n * 100) / 100;
+  }
+  function media(valores) {
+    const ns = valores.filter(n => n != null && n !== '').map(Number).filter(Number.isFinite);
+    return ns.length ? redondear(ns.reduce((s, n) => s + n, 0) / ns.length) : null;
+  }
+
+  /**
+   * Hojas del cuaderno de un grupo, como filas (listas de celdas) para SheetJS:
+   *  - notas: alumno, una columna por tarea, la media de cada evaluación y la media total
+   *    (la misma media que enseña el cuaderno: la de las notas puestas)
+   *  - comentarios: una fila por nota puesta, con la corrección y su origen
+   *  - faltas: solo si hay alguna
+   * `notas` son filas de la tabla notas; las notas son números, no texto.
+   */
+  function hojasCuaderno({ alumnos, tareas, notas }) {
+    const de = {};
+    for (const n of notas) de[`${n.alumno_id}_${n.tarea_id}`] = n;
+    const evaluaciones = [...new Set(tareas.map(t => t.evaluacion).filter(e => e != null && e !== ''))];
+    const titulo = t => t.evaluacion ? `${t.titulo} (${nombreEvaluacion(t.evaluacion)})` : t.titulo;
+    const nota = (a, t) => {
+      const v = de[`${a.id}_${t.id}`]?.nota;
+      return v == null || v === '' ? null : Number(v);
+    };
+
+    const cabecera = ['Apellidos', 'Nombre', ...tareas.map(titulo),
+      ...evaluaciones.map(e => `Media ${nombreEvaluacion(e)}`), 'Media'];
+    const filasNotas = alumnos.map(a => [
+      a.apellidos || '', a.nombre,
+      ...tareas.map(t => nota(a, t)),
+      ...evaluaciones.map(e => media(tareas.filter(t => String(t.evaluacion) === String(e)).map(t => nota(a, t)))),
+      media(tareas.map(t => nota(a, t))),
+    ]);
+
+    const comentarios = [['Apellidos', 'Nombre', 'Tarea', 'Evaluación', 'Nota', 'Comentario', 'Para mejorar', 'Mensaje para el alumno', 'Tu comentario', 'Origen', 'Corregida el']];
+    for (const t of tareas) {
+      for (const a of alumnos) {
+        const n = de[`${a.id}_${t.id}`];
+        if (!n || (n.nota == null && !n.comentario_ia && !n.comentario_profesor)) continue;
+        comentarios.push([
+          a.apellidos || '', a.nombre, t.titulo, t.evaluacion ? nombreEvaluacion(t.evaluacion) : '',
+          nota(a, t), n.comentario_ia || '', n.mejoras_ia || '', n.mensaje_motivador || '', n.comentario_profesor || '',
+          n.origen === 'markmate' ? 'Corrector (aprobada por ti)' : 'A mano',
+          n.corregido_at ? String(n.corregido_at).slice(0, 10) : '',
+        ]);
+      }
+    }
+
+    const hayFaltas = notas.some(n => Number(n.faltas) > 0);
+    const faltas = hayFaltas ? [['Apellidos', 'Nombre', ...tareas.map(titulo), 'Total'],
+      ...alumnos.map(a => {
+        const fs = tareas.map(t => { const f = de[`${a.id}_${t.id}`]?.faltas; return f == null || f === '' ? null : Number(f); });
+        return [a.apellidos || '', a.nombre, ...fs, fs.reduce((s, f) => s + (f || 0), 0)];
+      })] : null;
+
+    const limpiar = filas => filas && filas.map(f => f.map(sinFormula));
+    return { notas: limpiar([cabecera, ...filasNotas]), comentarios: limpiar(comentarios), faltas: limpiar(faltas) };
+  }
+
+  /* Nombre de hoja válido para Excel: sin []:*?/\ ni caracteres de control, sin apóstrofo al principio
+     ni al final, como mucho 31 caracteres, no «History» (reservado) y sin repetir */
+  function nombreHoja(nombre, usados) {
+    const recortar = t => t.replace(/^['\s]+|['\s]+$/g, '');
+    const base = recortar(recortar(String(nombre).replace(/[\[\]:*?\/\\\x00-\x1f]/g, ' ').replace(/\s+/g, ' ')).slice(0, 31)) || 'Hoja';
+    let n = base, k = 2;
+    if (n.toLowerCase() === 'history') usados.add('history');
+    while (usados.has(n.toLowerCase())) { const suf = ` (${k++})`; n = recortar(base.slice(0, 31 - suf.length)) + suf; }
+    usados.add(n.toLowerCase());
+    return n;
+  }
+
+  global.PasarNotas = { hojasCuaderno, nombreHoja, norm, palabras, nombraA, emparejar, elegirFilas, textoComentario, comentarioHtml, leerCsv, escribirCsv, rellenarHojaMoodle, tablaParaCopiar };
 })(typeof window !== 'undefined' ? window : globalThis);

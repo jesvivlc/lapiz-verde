@@ -73,10 +73,10 @@ async function prepararRuta(route) {
   if (url.host === 'app.test') {
     if (url.pathname === '/' || url.pathname === '/index.html') return route.fulfill({ contentType: 'text/html', body: fs.readFileSync(REPO + 'index.html') });
     if (url.pathname === '/entregar.html') return route.fulfill({ contentType: 'text/html', body: fs.readFileSync(REPO + 'entregar.html') });
-    if (url.pathname === '/pasar-notas.js' || url.pathname === '/leer-trabajos.js' || /^\/extension\/[\w.-]+$/.test(url.pathname)) {
+    if (url.pathname === '/pasar-notas.js' || url.pathname === '/leer-trabajos.js' || /^\/extension\/(iconos\/)?[\w.-]+$/.test(url.pathname)) {
       const f = REPO + url.pathname.slice(1);
       if (!fs.existsSync(f)) return route.fulfill({ status: 404, body: '' });
-      return route.fulfill({ contentType: f.endsWith('.js') ? 'text/javascript' : f.endsWith('.json') ? 'application/json' : 'text/plain', body: fs.readFileSync(f) });
+      return route.fulfill({ contentType: f.endsWith('.js') ? 'text/javascript' : f.endsWith('.json') ? 'application/json' : f.endsWith('.png') ? 'image/png' : 'text/plain', body: fs.readFileSync(f) });
     }
     if (url.pathname === '/api/entrega') {
       const b = req.postDataJSON(); llamadasEntregas.push(b);
@@ -701,13 +701,47 @@ console.log('== Pasar notas: hoja de Moodle, extensión y copiar ==');
   const de = await descargaExt;
   const zipExt = await JSZip.loadAsync(fs.readFileSync(await de.path()));
   const enZip = Object.keys(zipExt.files).filter(f => !zipExt.files[f].dir).sort();
-  ok(de.suggestedFilename() === 'pasar-notas.zip' && enZip.join() === ['LEEME.txt', 'fondo.js', 'manifest.json', 'popup.html', 'popup.js', 'puente.js', 'rellenar.js'].map(f => 'pasar-notas/' + f).sort().join(), 'descarga la extensión completa en un ZIP');
+  ok(de.suggestedFilename() === 'pasar-notas.zip' && enZip.join() === ['LEEME.txt', 'fondo.js', 'manifest.json', 'popup.html', 'popup.js', 'puente.js', 'rellenar.js', 'iconos/icono-16.png', 'iconos/icono-32.png', 'iconos/icono-48.png', 'iconos/icono-128.png'].map(f => 'pasar-notas/' + f).sort().join(), 'descarga la extensión completa en un ZIP');
   const manifest = JSON.parse(await zipExt.file('pasar-notas/manifest.json').async('string'));
   ok(manifest.manifest_version === 3 && !manifest.host_permissions && manifest.permissions.join() === 'storage,activeTab,scripting,alarms', 'la extensión no pide acceso a todas las webs');
   ok(manifest.content_scripts[0].exclude_matches.some(m => m.includes('entregar')), 'el puente no se carga en la página pública de los alumnos');
   const enManifest = [manifest.background.service_worker, manifest.action.default_popup, ...manifest.content_scripts[0].js];
   ok(enManifest.every(f => enZip.includes('pasar-notas/' + f)), 'el ZIP lleva todos los archivos que pide el manifest');
+  const iconoZip = await zipExt.file('pasar-notas/iconos/icono-128.png').async('nodebuffer');
+  ok(iconoZip.equals(fs.readFileSync(REPO + 'extension/iconos/icono-128.png')) && Object.values(manifest.icons).every(f => enZip.includes('pasar-notas/' + f)), 'los iconos van en el ZIP sin estropearse (binarios) y el manifest los declara');
   await page.screenshot({ path: OUT + '14-pasar-notas.png', fullPage: true });
+  ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
+}
+
+console.log('== Exportar el cuaderno a Excel ==');
+{
+  db.notas = [
+    { alumno_id: 'a-1', tarea_id: 't-1', nota: 9.2, faltas: 1, origen: 'markmate', comentario_ia: 'Muy buen trabajo', mejoras_ia: 'uno', mensaje_motivador: 'Sigue', corregido_at: '2026-10-12T10:00:00Z' },
+    { alumno_id: 'a-2', tarea_id: 't-1', nota: 4.6, faltas: null, origen: 'manual' },
+  ];
+  const { page, errores } = await prepararPagina(browser, { conSesion: true });
+  await page.waitForSelector('#app:not(.hidden)');
+  await page.click('.tab-btn[data-tab="cuaderno"]');
+  await page.waitForSelector('.grupo-card');
+  await page.click('.grupo-card');
+  await page.waitForSelector('#btnExportarGrupo');
+  const [descarga] = await Promise.all([page.waitForEvent('download'), page.click('#btnExportarGrupo')]);
+  ok(/^Cuaderno 3\.º ESO A \d{4}-\d{2}-\d{2}\.xlsx$/.test(descarga.suggestedFilename()), 'descarga «Cuaderno <grupo> <fecha>.xlsx»: ' + descarga.suggestedFilename());
+  const bytes = [...fs.readFileSync(await descarga.path())];
+  const libro = await page.evaluate((b) => {
+    const wb = XLSX.read(new Uint8Array(b), { type: 'array' });
+    const filas = n => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: null });
+    return { hojas: wb.SheetNames, notas: filas('Notas'), comentarios: filas('Comentarios'), faltas: filas('Faltas') };
+  }, bytes);
+  ok(libro.hojas.join() === 'Notas,Faltas,Comentarios', 'hojas: Notas, Faltas y Comentarios');
+  const ana = libro.notas.find(f => f[1] === 'Ana');
+  ok(ana && ana[0] === 'López García' && ana[2] === 9.2 && ana.at(-1) === 9.2, 'Ana: su nota como número y su media');
+  ok(libro.comentarios.some(f => f.includes('Muy buen trabajo') && f.includes('Corrector (aprobada por ti)')), 'el comentario de la corrección, con su origen');
+
+  await page.click('text=← Volver');
+  const [todo] = await Promise.all([page.waitForEvent('download'), page.click('#btnExportarTodo')]);
+  const hojas = await page.evaluate((b) => XLSX.read(new Uint8Array(b), { type: 'array' }).SheetNames, [...fs.readFileSync(await todo.path())]);
+  ok(todo.suggestedFilename().startsWith('Cuaderno completo') && hojas.includes('3.º ESO A') && hojas.includes('Comentarios'), 'exportar todo: una hoja por grupo y los comentarios juntos');
   ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
 }
 
