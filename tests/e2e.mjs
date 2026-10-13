@@ -25,12 +25,33 @@ fs.writeFileSync(OUT + 'teams.zip', await teams.generateAsync({ type: 'nodebuffe
 const moodle = new JSZip();
 moodle.file('Ana López_1234_assignsubmission_file_/redaccion.pdf', pdfDe('Ana'));
 fs.writeFileSync(OUT + 'moodle.zip', await moodle.generateAsync({ type: 'nodebuffer' }));
+// Word y LibreOffice dentro de un ZIP de Moodle; en la lista hay «Ana García» y en el ZIP, dos Anas
+async function docx(parrafos, imagen) {
+  const d = new JSZip();
+  d.file('[Content_Types].xml', '<Types/>');
+  d.file('word/document.xml', '<w:document xmlns:w="x"><w:body>' + parrafos.map(p => `<w:p><w:r><w:t xml:space="preserve">${p}</w:t></w:r></w:p>`).join('') + '</w:body></w:document>');
+  if (imagen) d.file('word/media/image1.png', imagen);
+  d.file('word/media/icono.png', png);   // adorno pequeño: no se manda
+  return d.generateAsync({ type: 'nodebuffer' });
+}
+async function odt(parrafos) {
+  const d = new JSZip();
+  d.file('mimetype', 'application/vnd.oasis.opendocument.text');
+  d.file('content.xml', '<office:document-content><office:body><office:text>' + parrafos.map(p => `<text:p>${p}</text:p>`).join('') + '</office:text></office:body></office:document-content>');
+  return d.generateAsync({ type: 'nodebuffer' });
+}
+const documentos = new JSZip();
+documentos.file('Ana García Pérez_11_assignsubmission_file_/redaccion.docx', await docx(['Nombre: Ana García Pérez', 'Mi verano en la playa de Ana García Pérez fue largo.']));
+documentos.file('Ana García López_12_assignsubmission_file_/redaccion.docx', await docx(['Texto de la otra Ana']));
+documentos.file('Luis Pérez_13_assignsubmission_file_/redaccion.odt', await odt(['Redacción de LibreOffice']));
+documentos.file('Marta Ruiz_14_assignsubmission_file_/redaccion.doc', Buffer.from('binario antiguo'));
+documentos.file('__MACOSX/._redaccion.docx', Buffer.from('x'));
 
 // ── Datos simulados ──
 const USER = { id: 'u-1', email: 'bruno@x.es', aud: 'authenticated', role: 'authenticated' };
 const db = {
   perfiles: [{ id: 'u-1', email: 'bruno@x.es', nombre: 'Bruno', creditos: 18 }],
-  grupos: [{ id: 'g-1', nombre: '3.º ESO A', nivel: '3ESO' }],
+  grupos: [{ id: 'g-1', nombre: '3.º ESO A', nivel: '3ESO' }, { id: 'g-2', nombre: '1.º ESO B (nuevo)', nivel: '1ESO' }],
   tareas: [{ id: 't-1', titulo: 'Comentario tema 3', rubrica: '- Rúbrica guardada (10 pts)', evaluacion: '1', peso_nota: null }],
   alumnos: [
     { id: 'a-1', nombre: 'Ana', apellidos: 'López García', email: 'ana@x.es' },
@@ -40,6 +61,7 @@ const db = {
   ],
 };
 db.entregas = [];
+const altasAlumnos = [];
 const upserts = [], correcciones = [], patches = [], borrados = [], llamadasEntregas = [], subidas = [];
 let creditosApi = 18;
 // De quién es una corrección, por el contenido del primer archivo (Ana y Marta mandan PDF; Luis, foto)
@@ -51,7 +73,7 @@ async function prepararRuta(route) {
   if (url.host === 'app.test') {
     if (url.pathname === '/' || url.pathname === '/index.html') return route.fulfill({ contentType: 'text/html', body: fs.readFileSync(REPO + 'index.html') });
     if (url.pathname === '/entregar.html') return route.fulfill({ contentType: 'text/html', body: fs.readFileSync(REPO + 'entregar.html') });
-    if (url.pathname === '/pasar-notas.js' || /^\/extension\/(iconos\/)?[\w.-]+$/.test(url.pathname)) {
+    if (url.pathname === '/pasar-notas.js' || url.pathname === '/leer-trabajos.js' || /^\/extension\/(iconos\/)?[\w.-]+$/.test(url.pathname)) {
       const f = REPO + url.pathname.slice(1);
       if (!fs.existsSync(f)) return route.fulfill({ status: 404, body: '' });
       return route.fulfill({ contentType: f.endsWith('.js') ? 'text/javascript' : f.endsWith('.json') ? 'application/json' : f.endsWith('.png') ? 'image/png' : 'text/plain', body: fs.readFileSync(f) });
@@ -96,6 +118,12 @@ async function prepararRuta(route) {
     if (m === 'POST' || m === 'PATCH') {
       const b = req.postDataJSON();
       if (tabla === 'notas') upserts.push(b);
+      if (tabla === 'alumnos' && m === 'POST' && (Array.isArray(b) ? b : [b])[0]?.grupo_id !== 'g-1') {   // alta desde el Corrector en otro grupo
+        const filas = (Array.isArray(b) ? b : [b]).map((a, k) => ({ id: `n-${altasAlumnos.length + k}`, email: null, ...a }));
+        altasAlumnos.push(...filas);
+        db.alumnos.push(...filas);
+        return json(filas, 201);
+      }
       if (m === 'PATCH') {
         patches.push({ tabla, b, filtro: url.search });
         if (tabla === 'tareas' || tabla === 'grupos' || tabla === 'entregas') {
@@ -111,6 +139,7 @@ async function prepararRuta(route) {
     if (tabla === 'perfiles') filas = filas.filter(p => p.id === eq('id'));
     if (tabla === 'entregas') filas = filas.filter(e => e.tarea_id === eq('tarea_id'));
     if (tabla === 'grupos' && eq('id')) filas = filas.filter(g => g.id === eq('id'));
+    if (tabla === 'alumnos' && eq('grupo_id')) filas = filas.filter(a => (a.grupo_id ?? 'g-1') === eq('grupo_id'));
     const cabecera = req.headers()['accept'] || '';
     if (cabecera.includes('vnd.pgrst.object')) return json(filas[0] ?? null);
     return json(filas);
@@ -182,8 +211,15 @@ console.log('== Con sesión: corregir con grupo del cuaderno (ZIP de Teams) ==')
   ok(await page.inputValue('#rubrica') === '- Rúbrica guardada (10 pts)', 'carga la rúbrica guardada de la tarea');
   ok(await page.inputValue('#nombreTarea') === 'Comentario tema 3', 'rellena el nombre de la tarea');
 
-  await page.setInputFiles('#zipFile', OUT + 'teams.zip');
+  await page.setInputFiles('#trabajosFile', OUT + 'teams.zip');
   await page.click('#btnCorregir');
+  await page.waitForSelector('#btnConfirmarEmparejado');
+  const resumen = await page.textContent('#modalContenido');
+  ok(correcciones.length === 0, 'antes de confirmar no se gasta ninguna corrección');
+  ok(resumen.includes('3 trabajos listos') && resumen.includes('1 sin entrega') && !resumen.includes('Revisa de quién'), 'resumen: 3 listos, Sara sin entrega, nada que revisar');
+  ok(await page.textContent('#btnConfirmarEmparejado') === 'Corregir 3' && resumen.includes('te quedan 18'), 'el botón dice cuántas gastará y cuántas quedan');
+  await page.screenshot({ path: OUT + '2a-resumen.png', fullPage: true });
+  await page.click('#btnConfirmarEmparejado');
   await page.waitForSelector('#btnCorregir:not([disabled])', { timeout: 20000 });
   await page.waitForTimeout(300);
 
@@ -238,9 +274,11 @@ console.log('== ZIP de Moodle/Aules + Excel, y quedarse sin créditos ==');
   await page.waitForFunction(() => document.getElementById('alumnosNum').textContent === '1');
   await page.fill('#nombreTarea', 'Redacción');
   await page.fill('#rubrica', '- x (10 pts)');
-  await page.setInputFiles('#zipFile', OUT + 'moodle.zip');
+  await page.setInputFiles('#trabajosFile', OUT + 'moodle.zip');
   await page.click('#btnCorregir');
-  await page.waitForSelector('#modal:not(.hidden)', { timeout: 20000 });
+  await page.waitForSelector('#btnConfirmarEmparejado');
+  await page.click('#btnConfirmarEmparejado');
+  await page.waitForSelector('#modalContenido .bonos', { timeout: 20000 });
   ok(correcciones.length === 1 && quien(correcciones[0]) === 'Ana', 'encuentra a Ana en el ZIP de Moodle (sin nombre de tarea en la ruta)');
   ok((await page.textContent('#modalContenido')).includes('9 €'), 'sin créditos → abre la compra de bonos');
   await page.screenshot({ path: OUT + '4-sin-creditos.png', fullPage: true });
@@ -249,6 +287,158 @@ console.log('== ZIP de Moodle/Aules + Excel, y quedarse sin créditos ==');
   await page.waitForFunction(() => document.getElementById('rubrica').value.includes('Propuesta IA') || document.querySelector('.toast.show'));
   ok(true, 'botón de rúbrica responde');
   ok(errores.filter(e => !e.includes('402')).length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
+}
+
+console.log('== Word, LibreOffice y alumnos que se confunden ==');
+{
+  correcciones.length = 0; creditosApi = 10;
+  const { page, errores } = await prepararPagina(browser, { conSesion: true });
+  await page.waitForSelector('#app:not(.hidden)');
+  await page.evaluate(() => {
+    const ws = XLSX.utils.json_to_sheet([{ Nombre: 'Ana', Apellidos: 'García' }, { Nombre: 'Luis', Apellidos: 'Pérez' }, { Nombre: 'Marta', Apellidos: 'Ruiz' }, { Nombre: 'Sara', Apellidos: 'Gil' }]);
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'A');
+    const dt = new DataTransfer(); dt.items.add(new File([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], 'alumnos.xlsx'));
+    const input = document.getElementById('excelFile'); input.files = dt.files; onExcelSelected(input);
+  });
+  await page.waitForFunction(() => document.getElementById('alumnosNum').textContent === '4');
+  await page.fill('#nombreTarea', 'Redacción');
+  await page.fill('#rubrica', '- x (10 pts)');
+  const imagen = fs.readFileSync(OUT + 'foto-grande.png');
+  const zipDoc = new JSZip();
+  zipDoc.file('Ana García Pérez_11_assignsubmission_file_/redaccion.docx', await docx(['Nombre: Ana García Pérez', 'Mi verano en la playa de Ana García Pérez fue largo.'], imagen));
+  for (const [ruta, f] of Object.entries(documentos.files)) if (!ruta.startsWith('Ana García Pérez') && !f.dir) zipDoc.file(ruta, await f.async('nodebuffer'));
+  fs.writeFileSync(OUT + 'documentos.zip', await zipDoc.generateAsync({ type: 'nodebuffer' }));
+  await page.setInputFiles('#trabajosFile', OUT + 'documentos.zip');
+  await page.click('#btnCorregir');
+  await page.waitForSelector('#btnConfirmarEmparejado');
+  const resumen = await page.textContent('#modalContenido');
+  ok(resumen.includes('Revisa de quién son (2)') && resumen.includes('Ana García Pérez') && resumen.includes('Ana García López'), 'las dos Anas del ZIP salen para elegir, con su nombre de Moodle');
+  ok(resumen.includes('Formato que no sé leer') && resumen.includes('Marta Ruiz'), 'avisa del .doc antiguo de Marta antes de corregir');
+  ok(resumen.includes('1 sin entrega') && resumen.includes('Sara Gil'), 'Sara, sin entrega');
+  ok(await page.textContent('#btnConfirmarEmparejado') === 'Corregir 1', 'de momento solo se corrige a Luis: nada preseleccionado para Ana');
+  await page.screenshot({ path: OUT + '4b-revisar.png', fullPage: true });
+  const selectPerez = await page.$('select[aria-label="De quién es Ana García Pérez"]');
+  await selectPerez.selectOption({ label: 'Ana García' });
+  ok(await page.textContent('#btnConfirmarEmparejado') === 'Corregir 2', 'al elegir, el contador sube a 2');
+  await page.click('#btnConfirmarEmparejado');
+  await page.waitForSelector('#btnCorregir:not([disabled])', { timeout: 20000 });
+  await page.waitForTimeout(300);
+  ok(correcciones.length === 2, `2 correcciones: Ana (Word) y Luis (LibreOffice); Marta no gasta: ${correcciones.length}`);
+  const ana = correcciones.find(c => c.texto_tarea?.includes('verano'));
+  ok(ana && !ana.texto_tarea.includes('Pérez') && !ana.texto_tarea.includes('otra Ana') && ana.texto_tarea.includes('Nombre: [nombre del alumno]'), 'el texto del Word llega sin el nombre de la alumna ni el trabajo de la otra Ana');
+  ok(ana?.archivos?.length === 1 && ana.archivos[0].tipo === 'jpeg', 'la imagen del Word va como foto; el icono pequeño, no');
+  ok(correcciones.some(c => c.texto_tarea?.includes('Redacción de LibreOffice') && !c.archivos.length), 'el texto del LibreOffice de Luis');
+  const tarjetas = await page.textContent('#cardsGrid');
+  ok(tarjetas.includes('Formato que no sé leer') && tarjetas.includes('redaccion.doc'), 'la tarjeta de Marta explica qué pasa con su archivo');
+  ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
+
+  const tope = await page.evaluate(async () => {
+    const z = new JSZip(); z.file('word/document.xml', 'a'.repeat(200000));
+    const doc = await JSZip.loadAsync(await z.generateAsync({ type: 'uint8array' }));
+    const corta = await leerConTope(doc.file('word/document.xml'), 0.05).then(() => 'leído', e => e.message);
+    const entero = (await leerConTope(doc.file('word/document.xml'), 1)).length;
+    return { corta, entero };
+  });
+  ok(tope.corta === 'demasiado grande' && tope.entero === 200000, 'lo de dentro de un Word se descomprime por partes y se corta al pasar el tope');
+
+  // Cancelar el resumen no corrige nada
+  correcciones.length = 0;
+  await page.click('#btnCorregir');
+  await page.waitForSelector('#btnConfirmarEmparejado');
+  await page.click('#modalContenido >> text=Cancelar');
+  await page.waitForTimeout(300);
+  ok(correcciones.length === 0 && await page.isHidden('#modal'), 'cancelar el resumen no corrige nada');
+}
+
+console.log('== Una sola zona: grupo vacío, archivos sueltos, fotos sin nombre y alumno nuevo ==');
+{
+  correcciones.length = 0; creditosApi = 20;
+  const { page, errores } = await prepararPagina(browser, { conSesion: true });
+  await page.waitForSelector('#app:not(.hidden)');
+  ok(await page.$('#zipFile') === null && await page.$('#escaneoFile') === null, 'ya no hay una zona para el ZIP y otra para el escaneo');
+
+  // Grupo sin alumnos + ZIP de Moodle: la lista sale del ZIP y se guarda en el grupo
+  await page.selectOption('#selGrupo', 'g-2');
+  await page.waitForFunction(() => !document.getElementById('selTarea').disabled);
+  await page.evaluate(() => { tareasGrupoSel.push({ id: 't-9', titulo: 'Redacción', rubrica: '- x (10 pts)' }); const o = new Option('Redacción', 't-9'); document.getElementById('selTarea').add(o); });
+  await page.selectOption('#selTarea', 't-9');
+  await page.fill('#nombreTarea', 'Redacción');
+  await page.fill('#rubrica', '- x (10 pts)');
+  await page.setInputFiles('#trabajosFile', OUT + 'documentos.zip');
+  await page.click('#btnCorregir');
+  await page.waitForSelector('#btnCrearLista');
+  const lista = await page.textContent('#modalContenido');
+  ok(lista.includes('todavía no tiene alumnos') && ['Ana García Pérez', 'Ana García López', 'Luis Pérez', 'Marta Ruiz'].every(n => lista.includes(n)), 'grupo vacío: propone la lista con los 4 nombres del ZIP');
+  await page.screenshot({ path: OUT + '4c-lista.png', fullPage: true });
+  await page.click('#btnCrearLista');
+  await page.waitForSelector('#btnConfirmarEmparejado');
+  ok(altasAlumnos.length === 4 && altasAlumnos.every(a => a.grupo_id === 'g-2' && /^[0-9a-f-]{36}$/.test(a.id)) && altasAlumnos.some(a => a.nombre === 'Ana' && a.apellidos === 'García Pérez'), 'los da de alta en el grupo, con nombre, apellidos y su id');
+  const resumen = await page.textContent('#modalContenido');
+  ok(resumen.includes('3 trabajos listos') && !resumen.includes('Revisa de quién'), 'con la lista sacada del ZIP, cada uno con lo suyo (Marta, .doc: no gasta)');
+  await page.click('#modalContenido >> text=Cancelar');
+  // Volver a corregir el mismo ZIP: los alumnos ya existen y no se duplican
+  await page.click('#btnCorregir');
+  await page.waitForSelector('#btnConfirmarEmparejado');
+  ok(altasAlumnos.length === 4, 'la segunda vez no se crean alumnos repetidos');
+  await page.click('#modalContenido >> text=Cancelar');
+
+  // Archivos sueltos con el nombre del alumno, sin grupo y sin Excel
+  await page.selectOption('#selGrupo', '');
+  await page.fill('#nombreTarea', 'Redacción');
+  await page.fill('#rubrica', '- x (10 pts)');
+  const docLuis = await docx(['Texto de Luis']);
+  await page.setInputFiles('#trabajosFile', [
+    { name: 'Ana López.pdf', mimeType: 'application/pdf', buffer: pdfDe('Ana') },
+    { name: 'Luis Pérez.docx', mimeType: 'application/octet-stream', buffer: docLuis },
+    { name: 'Sergio Vidal.pdf', mimeType: 'application/pdf', buffer: pdfDe('Sergio') },
+  ]);
+  ok((await page.textContent('#trabajosZone')).includes('3 archivos'), 'la zona dice cuántos archivos hay');
+  await page.click('#btnCorregir');
+  await page.waitForSelector('#btnCrearLista');
+  await page.click('[data-nombre="2"]');   // Sergio no es de la clase
+  await page.click('#btnCrearLista');
+  await page.waitForSelector('#btnConfirmarEmparejado');
+  const r2 = await page.textContent('#modalContenido');
+  ok(r2.includes('2 trabajos listos') && r2.includes('Sergio Vidal'), 'sin grupo ni Excel: lista temporal; lo de Sergio queda por revisar');
+  ok(await page.$('select[aria-label="De quién es Sergio Vidal.pdf"] option[value="nuevo"]') !== null, 'ofrece añadir a Sergio a la lista');
+  await page.selectOption('select[aria-label="De quién es Sergio Vidal.pdf"]', 'nuevo');
+  ok(await page.textContent('#btnConfirmarEmparejado') === 'Corregir 3', 'al añadirlo, el contador sube a 3');
+  await page.click('#btnConfirmarEmparejado');
+  await page.waitForSelector('#btnCorregir:not([disabled])', { timeout: 20000 });
+  await page.waitForTimeout(300);
+  ok(correcciones.length === 3 && correcciones.some(c => c.texto_tarea?.includes('Texto de [nombre del alumno]')), `3 correcciones, el Word de Luis como texto (${correcciones.length})`);
+  ok(await page.evaluate(() => cards.some(c => c.alumno.nombre === 'Sergio Vidal' && c.result)), 'Sergio tiene su tarjeta corregida');
+
+  // Un PDF sin nombre ni pegatinas: no se manda entero a nadie
+  correcciones.length = 0;
+  await page.selectOption('#selGrupo', 'g-1');
+  await page.waitForFunction(() => alumnosGrupoCargado === 'g-1');
+  await page.selectOption('#selTarea', 't-1');
+  await page.setInputFiles('#trabajosFile', [{ name: 'escaneo-sin-pegatinas.pdf', mimeType: 'application/pdf', buffer: await (async () => { const g = await (await browser.newContext()).newPage(); await g.setContent('<p>Libretas sin pegatina</p>'); return g.pdf(); })() }]);
+  await page.click('#btnCorregir');
+  await page.waitForFunction(() => /ninguna pegatina QR/.test(document.getElementById('toast').textContent), null, { timeout: 60000 });
+  ok(correcciones.length === 0 && await page.isHidden('#btnConfirmarEmparejado').catch(() => true), 'PDF sin pegatinas ni nombres: avisa y no ofrece mandarlo a nadie');
+
+  // Fotos del móvil sin nombre ni pegatina: el profe dice de quién es cada una
+  correcciones.length = 0;
+  await page.selectOption('#selGrupo', 'g-1');
+  await page.waitForFunction(() => !document.getElementById('selTarea').disabled);
+  await page.selectOption('#selTarea', 't-1');
+  await page.setInputFiles('#trabajosFile', [
+    { name: 'IMG_2041.jpg', mimeType: 'image/png', buffer: fs.readFileSync(OUT + 'foto-grande.png') },
+    { name: 'IMG_2042.jpg', mimeType: 'image/png', buffer: fs.readFileSync(OUT + 'foto-grande.png') },
+  ]);
+  await page.click('#btnCorregir');
+  await page.waitForSelector('#btnConfirmarEmparejado', { timeout: 60000 });
+  const r3 = await page.textContent('#modalContenido');
+  ok(r3.includes('Revisa de quién son (2)') && r3.includes('IMG_2041.jpg') && await page.textContent('#btnConfirmarEmparejado') === 'Corregir 0', 'sin pegatinas ni nombres: las dos fotos, para elegir; nada se corrige solo');
+  await page.selectOption('select[aria-label="De quién es IMG_2041.jpg"]', { label: 'Luis Pérez' });
+  await page.selectOption('select[aria-label="De quién es IMG_2042.jpg"]', { label: 'Luis Pérez' });
+  await page.click('#btnConfirmarEmparejado');
+  await page.waitForSelector('#btnCorregir:not([disabled])', { timeout: 20000 });
+  await page.waitForTimeout(300);
+  ok(correcciones.length === 1 && correcciones[0].archivos.length === 2, 'las dos fotos, a Luis, en una sola corrección');
+  ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
 }
 
 console.log('== Cuaderno ==');
@@ -361,7 +551,7 @@ console.log('== Escaneo de libretas con pegatinas QR ==');
   await page.selectOption('#selGrupo', 'g-1');
   await page.waitForFunction(() => !document.getElementById('selTarea').disabled);
   await page.selectOption('#selTarea', 't-1');
-  await page.setInputFiles('#escaneoFile', OUT + 'escaneo.pdf');
+  await page.setInputFiles('#trabajosFile', OUT + 'escaneo.pdf');
   page.once('dialog', d => d.accept());
   await page.click('#btnCorregir');
   await page.waitForFunction(() => document.getElementById('progressText').textContent.includes('completada'), null, { timeout: 60000 });
@@ -371,6 +561,21 @@ console.log('== Escaneo de libretas con pegatinas QR ==');
   ok(paginas === '1,2' && correcciones.every(c => c.archivos.every(a => a.tipo === 'jpeg')), 'Ana: su pegatina y la página siguiente (2 páginas); Marta: 1 página');
   ok((await page.textContent('#statsBar')).includes('2 sin entrega'), 'Luis y Sara salen como sin entrega');
   await page.screenshot({ path: OUT + '9-escaneo.png', fullPage: true });
+  const tapada = await page.evaluate(async () => {
+    await cargarLibreria('qrcode');
+    const c = document.createElement('canvas'); c.width = 1200; c.height = 1600;
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+    const img = new Image(); img.src = 'data:image/svg+xml,' + encodeURIComponent(svgQR('LV1:a-1'));
+    await img.decode(); ctx.drawImage(img, 100, 100, 300, 300);
+    ctx.fillStyle = '#000'; ctx.font = '40px sans-serif'; ctx.fillText('Ana López García', 420, 260); ctx.fillText('Texto de la libreta', 100, 900);
+    const { qr, blob } = await procesarPagina(c);
+    const bmp = await createImageBitmap(blob); const d = document.createElement('canvas'); d.width = bmp.width; d.height = bmp.height;
+    const dctx = d.getContext('2d', { willReadFrequently: true }); dctx.drawImage(bmp, 0, 0);
+    const oscuro = (x, y, w, h) => { const px = dctx.getImageData(x, y, w, h).data; let n = 0; for (let i = 0; i < px.length; i += 4) if (px[i] < 128) n++; return n; };
+    const k = d.width / 1200;
+    return { qr, despues: leerQR(d), nombre: oscuro(420 * k, 210 * k, 400 * k, 70 * k), texto: oscuro(100 * k, 860 * k, 400 * k, 60 * k) };
+  });
+  ok(tapada.qr === 'LV1:a-1' && tapada.despues === null && tapada.nombre === 0 && tapada.texto > 0, 'la pegatina (QR y nombre) se tapa en la página que va a la IA; el resto, no');
   ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
 }
 
@@ -547,10 +752,10 @@ console.log('== ZIP descargado de Drive (Classroom) o de OneDrive (Teams) ==');
   const r = await page.evaluate(() => {
     const drive = ['Comentario tema 3/Ana López García - Comentario tema 3.pdf', 'Comentario tema 3/IMG_2041.jpg', 'Comentario tema 3/Luis Pérez - foto 1.jpg', 'Comentario tema 3/Luis Pérez - foto 2.jpg'];
     const onedrive = ['Student Work/Submitted files/López García, Ana/Comentario tema 3/trabajo.pdf', 'Student Work/Submitted files/Pérez, Luis/Comentario tema 3/foto.png'];
-    return {
-      ana: buscarArchivosAlumno(drive, 'Ana López García'), luis: buscarArchivosAlumno(drive, 'Luis Pérez'),
-      anaOne: buscarArchivosAlumno(onedrive, 'Ana López García'), luisOne: buscarArchivosAlumno(onedrive, 'Luis Pérez'),
-    };
+    const alumnos = [{ nombre: 'Ana López García' }, { nombre: 'Luis Pérez' }];
+    const d = LeerTrabajos.emparejarEntregas(drive, alumnos, { tarea: 'Comentario tema 3' }).asignados;
+    const o = LeerTrabajos.emparejarEntregas(onedrive, alumnos, { tarea: 'Comentario tema 3' }).asignados;
+    return { ana: d[0] || [], luis: d[1] || [], anaOne: o[0] || [], luisOne: o[1] || [] };
   });
   ok(r.ana.length === 1 && r.luis.length === 2, 'Drive (Classroom): archivos con el nombre del alumno, incluidas varias fotos');
   ok(r.anaOne.length === 1 && r.luisOne.length === 1, 'OneDrive (Teams): carpeta «Apellidos, Nombre»');
