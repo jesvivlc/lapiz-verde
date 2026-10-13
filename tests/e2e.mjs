@@ -78,6 +78,11 @@ async function prepararRuta(route) {
       if (!fs.existsSync(f)) return route.fulfill({ status: 404, body: '' });
       return route.fulfill({ contentType: f.endsWith('.js') ? 'text/javascript' : f.endsWith('.json') ? 'application/json' : f.endsWith('.png') ? 'image/png' : 'text/plain', body: fs.readFileSync(f) });
     }
+    if (/^\/media\/[\w-]+\.(mp4|jpg)$/.test(url.pathname)) {
+      const f = REPO + url.pathname.slice(1);
+      if (!fs.existsSync(f)) return route.fulfill({ status: 404, body: '' });
+      return route.fulfill({ contentType: f.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg', body: fs.readFileSync(f) });
+    }
     if (url.pathname === '/api/entrega') {
       const b = req.postDataJSON(); llamadasEntregas.push(b);
       if (b.t !== 'T'.repeat(32)) return json({ error: 'Este enlace no es válido.' }, 404);
@@ -185,6 +190,8 @@ console.log('== Sin sesión: página de entrada ==');
   const prot = await page.textContent('#proteccion');
   ok((await page.$$('#proteccion .garantia')).length === 6 && prot.includes('No le damos su nombre a la IA') && prot.includes('inicial del apellido') && prot.includes('60 días'), 'mensaje de protección de datos con sus garantías');
   ok(!(await page.textContent('#pantalla-entrada')).includes('se envían para su corrección y no se guardan'), 'la FAQ ya no dice algo que no es cierto con las entregas por enlace');
+  const video = await page.$eval('#guia video', v => ({ src: v.getAttribute('src'), poster: v.getAttribute('poster') }));
+  ok(video.src === '/media/como-funciona.mp4' && fs.existsSync(REPO + video.src.slice(1)) && fs.existsSync(REPO + video.poster.slice(1)), 'la portada enseña el vídeo de cómo funciona, y el archivo existe');
   await page.screenshot({ path: OUT + '1-entrada.png', fullPage: true });
   await page.fill('#loginEmail', 'nuevo@x.es');
   await page.click('#btnLogin');
@@ -205,6 +212,11 @@ console.log('== Con sesión: corregir con grupo del cuaderno (ZIP de Teams) ==')
   await page.selectOption('#selGrupo', 'g-1');
   await page.waitForFunction(() => !document.getElementById('selTarea').disabled);
   ok(await page.isHidden('#excelGroup'), 'con grupo elegido, el Excel se oculta');
+  await page.click('text=▶ Cómo funciona (30 s)');
+  await page.waitForFunction(() => document.querySelector('#modalContenido video')?.readyState >= 1);
+  ok(true, 'dentro de la app, «Cómo funciona» abre el vídeo y carga');
+  await page.click('#modalContenido >> text=Cerrar');
+  ok(await page.$eval('#modalContenido video', v => v.paused), 'al cerrar, el vídeo se para');
   ok((await page.textContent('#alumnosBadge')).includes('4'), 'cuenta 4 alumnos del grupo');
   ok(await page.inputValue('#cursoForm') === '3ESO', 'el curso se toma del grupo');
   await page.selectOption('#selTarea', 't-1');
