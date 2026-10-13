@@ -1312,6 +1312,7 @@
       email: a.email || '',
     }));
     if (!errorAlumnos) alumnosGrupoCargado = grupoId;
+    else showToast('No se pudieron cargar los alumnos del grupo. Vuelve a elegirlo para reintentar.', 'error');
 
     selTarea.disabled = false;
     selTarea.innerHTML = `<option value="">— Elige tarea —</option>` +
@@ -1430,6 +1431,7 @@
   }
 
   const MAX_ARCHIVOS_SOLTADOS = 3000;
+  const MAX_MB_ESCANEO = 500;   // lo que se lee a la vez para buscar pegatinas QR
   async function archivosDeEntradas(entradas) {
     const salida = [];
     async function recorrer(entrada, base) {
@@ -2199,7 +2201,7 @@
     const datos = datosFormulario();
     if (!datos) return;
     const grupoId = document.getElementById('selGrupo').value;   // fijo para toda la corrección
-    if (grupoId && alumnosGrupoCargado !== grupoId) return showToast('Espera un momento: estoy cargando los alumnos del grupo', 'warning');
+    if (grupoId && alumnosGrupoCargado !== grupoId) return showToast('Los alumnos del grupo no están cargados: espera un momento o vuelve a elegir el grupo', 'warning');
     let alumnos = await alumnosParaCorregir();
     if (!alumnos) return;
     alumnos = alumnos.slice();
@@ -2217,13 +2219,15 @@
     // Ningún nombre encaja y son PDF o fotos: ¿libretas escaneadas con pegatina QR?
     const conNombre = emp && (Object.keys(emp.asignados).length || emp.porRevisar.some(p => p.motivo !== 'desconocido'));
     const soloPapel = rutas.every(r => ['pdf', 'imagen'].includes(LeerTrabajos.tipoArchivo(r)));
+    const hayPdf = rutas.some(r => LeerTrabajos.tipoArchivo(r) === 'pdf');
     if (!conNombre && soloPapel && alumnos.length && grupoId) {
       if (rutas.some(r => fuente.get(r).mb() > MAX_MB_DESCOMPRIMIDO)) return showToast('Hay un archivo demasiado grande. Escanéalo en varias partes.', 'error');
+      if (rutas.reduce((t, r) => t + fuente.get(r).mb(), 0) > MAX_MB_ESCANEO) return showToast(`Entre todos los archivos pasan de ${MAX_MB_ESCANEO} MB. Corrige la clase en dos veces.`, 'error');
       const archivos = [];
       for (const r of rutas) archivos.push(fuente.get(r).file ?? new File([await fuente.get(r).uint8()], r.split('/').pop()));
       if (await corregirEscaneo(archivos, datos)) return;
-      // Sin ninguna pegatina: un PDF puede ser el escaneo de varias libretas; no se manda entero a nadie
-      if (rutas.some(r => LeerTrabajos.tipoArchivo(r) === 'pdf')) {
+      // Sin ninguna pegatina: un PDF sin nombre puede ser el escaneo de varias libretas; no se manda entero a nadie
+      if (hayPdf) {
         return showToast('No he encontrado ninguna pegatina QR de este grupo. Si son libretas escaneadas, ¿es el grupo correcto? Si son trabajos sueltos, pon el nombre del alumno en cada archivo.', 'error');
       }
     }
