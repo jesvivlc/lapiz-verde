@@ -265,6 +265,20 @@ ok(estado.creditos === 4, 'cobra 1 corrección por alumno, no por página');
 reiniciar(); res = respuesta();
 await corregir(peticion({ body: { ...base, archivos: Array.from({ length: 11 }, () => ({ base64: 'A', tipo: 'jpeg' })) } }), res);
 ok(res.statusCode === 400 && estado.creditos === 5, 'más de 10 páginas → 400 sin cobrar');
+reiniciar(); res = respuesta();
+await corregir(peticion({ body: { ...base, texto_tarea: 'Texto de un Word', archivos: [{ base64: 'AAAA', tipo: 'png' }] } }), res);
+const contWord = estado.anthropicBody?.messages[0].content ?? [];
+ok(res.statusCode === 200 && contWord.length === 4 && contWord[2].text === 'Texto de un Word' && contWord[3].type === 'image' && estado.creditos === 4,
+  'Word con imágenes: texto y luego sus imágenes, en 1 sola corrección');
+reiniciar(); res = respuesta();
+await corregir(peticion({ body: { ...base, texto_tarea: 'x', archivos: [{ base64: 'AAAA', tipo: 'docx' }] } }), res);
+ok(res.statusCode === 400 && estado.creditos === 5, 'texto con un archivo de tipo no admitido → 400 sin cobrar');
+reiniciar(); res = respuesta();
+await corregir(peticion({ body: { ...base, texto_tarea: { trampa: 1 } } }), res);
+ok(res.statusCode === 400 && estado.creditos === 5, 'texto_tarea que no es texto → 400 sin cobrar');
+reiniciar(); res = respuesta();
+await corregir(peticion({ body: { ...base, texto_tarea: 'x'.repeat(20001), archivos: [{ base64: 'AAAA', tipo: 'png' }] } }), res);
+ok(res.statusCode === 400 && estado.creditos === 5, 'texto largo y archivos a la vez → 400 sin cobrar (presupuesto conjunto)');
 
 console.log('== /api/entrega (enlace para alumnos, sin cuenta) ==');
 const { default: entrega, etiquetasAlumnos } = await import('../api/entrega.js');

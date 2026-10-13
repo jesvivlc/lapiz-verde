@@ -631,6 +631,9 @@
     }
     .sin-identificar-item .que { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
     .sin-identificar-item select { flex: 1 1 160px; padding: 6px; }
+    .sin-identificar-item small, .resumen-ayuda { color: var(--text-muted); font-size: 13px; }
+    .resumen-emparejado { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+    .resumen-aviso { color: #92400E; font-size: 13px; }
     .enlace-caja { display: flex; gap: 8px; }
     .enlace-caja input { flex: 1; min-width: 0; font-size: 13px; }
     .qr-enlace { align-self: center; text-align: center; font-size: 12px; color: var(--text-muted); }
@@ -894,7 +897,7 @@
           <input type="file" id="zipFile" accept=".zip" onchange="onZipSelected(this)">
           <span class="dropzone-icon">📦</span>
           <div class="dropzone-label">Arrastra el ZIP aquí o haz clic</div>
-          <div class="dropzone-hint">Descargado de Teams o de Aules/Moodle ("Descargar todas las entregas")</div>
+          <div class="dropzone-hint">Descargado de Teams, Aules/Moodle ("Descargar todas las entregas") o Drive. PDF, fotos, Word, LibreOffice o PowerPoint</div>
         </div>
       </div>
 
@@ -1020,6 +1023,7 @@
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
 <script src="pasar-notas.js"></script>
+<script src="leer-trabajos.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.min.js" integrity="sha384-dl/4LkSyQ4uEucc48NM6VDZLAjLLq9yMzZ5JLXumBq7Ld33XBof73hseOqPhO89+" crossorigin="anonymous"></script>
 <script>
   /* ── Supabase ── */
@@ -1230,6 +1234,7 @@
   }
   function cerrarModal() {
     document.getElementById('modal').classList.add('hidden');
+    if (alResolverResumen) { const r = alResolverResumen; alResolverResumen = null; r(null); }   // cancelar el resumen del ZIP
   }
 
   /* ── Config ── */
@@ -1463,18 +1468,7 @@
     return String(str).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   }
 
-  function palabras(str) {
-    return norm(str).split(/[^a-z0-9ñ]+/).filter(p => p.length > 1);
-  }
-
-  /* ¿Aparecen todas las palabras del nombre en este trozo de ruta? Soporta
-     "Ana López", "López, Ana" y "Ana López_1234_assignsubmission_file_" (Moodle). */
-  function coincideNombre(parteRuta, nombre, minimo) {
-    const enRuta = new Set(palabras(parteRuta));
-    const delNombre = palabras(nombre);
-    const aciertos = delNombre.filter(p => enRuta.has(p)).length;
-    return delNombre.length > 0 && aciertos >= (minimo ?? delNombre.length);
-  }
+  /* De quién es cada archivo: LeerTrabajos.emparejarEntregas (leer-trabajos.js) */
 
   /* Extrae el número de versión del path ("Versión 2" → 2) */
   function versionNum(path) {
@@ -1482,22 +1476,14 @@
     return m ? parseInt(m[1]) : 0;
   }
 
-  const EXT_VALIDAS = /\.(pdf|jpe?g|png|webp|gif)$/i;
-
-  /* Teams mete el nombre de la tarea en la ruta y puede traer varias tareas en el mismo ZIP;
-     Moodle/Aules no lo mete. Si el ZIP menciona la tarea en alguna ruta, se exige; si no, basta el alumno. */
+  /* Teams y Drive meten la tarea en una carpeta y pueden traer varias tareas en el mismo ZIP;
+     Moodle/Aules no. Si alguna carpeta del ZIP se llama como la tarea, se exige; si no, vale todo.
+     Solo se miran las carpetas: un alumno que llama «redaccion.pdf» a su archivo no deja fuera al resto. */
   function filtrarPorTarea(rutas, nombreTarea) {
     if (!nombreTarea) return rutas;
-    const conTarea = rutas.filter(r => norm(r).includes(norm(nombreTarea)));
+    const carpeta = r => norm(r.split('/').slice(0, -1).join('/'));
+    const conTarea = rutas.filter(r => carpeta(r).includes(norm(nombreTarea)));
     return conTarea.length ? conTarea : rutas;
-  }
-
-  function buscarArchivosAlumno(rutas, nombre) {
-    const buscar = minimo => rutas.filter(ruta => ruta.split('/').some(p => coincideNombre(p, nombre, minimo)));
-    let candidatos = buscar();
-    /* Nombre largo (dos apellidos) que en la plataforma sale sin uno: basta con 2 palabras */
-    if (!candidatos.length && palabras(nombre).length >= 3) candidatos = buscar(2);
-    return candidatos.sort((a, b) => versionNum(b) - versionNum(a));
   }
 
   async function blobABase64(blob) {
@@ -1880,26 +1866,203 @@
      CANAL 1: ZIP de Teams o de Aules/Moodle
   ══════════════════════════════════════ */
 
-  /* Los archivos de la última versión del alumno (varias fotos = varias páginas), en orden */
-  async function leerEntregaZip(zip, rutasAlumno) {
-    const ultima = versionNum(rutasAlumno[0]);
-    const rutas = rutasAlumno.filter(r => versionNum(r) === ultima)
-      .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
-      .slice(0, MAX_PAGINAS);
-    const archivos = [];
-    let mb = 0;
-    for (const ruta of rutas) {
-      const a = await leerArchivoZip(zip, ruta);
-      if (mb + a.sizeMB > MAX_MB_ARCHIVO) {
-        if (!archivos.length) {
-          throw errorTarjeta('Archivo grande', `El PDF ocupa ${a.sizeMB.toFixed(1)} MB y el máximo es ${MAX_MB_ARCHIVO} MB. Exporta el PDF comprimido o como fotos.`);
-        }
-        break;
-      }
-      mb += a.sizeMB;
-      archivos.push({ base64: a.base64, tipo: a.tipo });
+  const MAX_TEXTO = 38000;              // caracteres del texto de los documentos (la API admite 40.000)
+  const MAX_TEXTO_CON_IMAGENES = 19000;  // si además van imágenes (la API admite 20.000)
+  const MIN_BYTES_IMAGEN_DOC = 8 * 1024; // en un Word, lo más pequeño son iconos y adornos
+  const MAX_IMAGENES_DOC = 30;           // imágenes de un documento que se miran como mucho
+  const MAX_MB_DESCOMPRIMIDO = 40;       // un archivo que descomprimido ocupa más es sospechoso (bomba ZIP)
+  /* Tamaño descomprimido de un archivo de JSZip, sin descomprimirlo (lo que declara el propio ZIP) */
+  const tamanoMB = f => (f?._data?.uncompressedSize ?? 0) / 1024 / 1024;
+  /* Descomprime sin fiarse de lo que declara el archivo (dentro de un Word lo controla el alumno):
+     se lee por partes y se corta al pasar el tope */
+  function leerConTope(f, maxMB = MAX_MB_DESCOMPRIMIDO) {
+    return new Promise((resolver, fallar) => {
+      const max = maxMB * 1024 * 1024, trozos = [];
+      let total = 0, cortado = false;
+      const flujo = f.internalStream('uint8array');
+      flujo.on('data', d => {
+        if (cortado) return;
+        total += d.length;
+        if (total > max) { cortado = true; flujo.pause(); fallar(new Error('demasiado grande')); return; }
+        trozos.push(d);
+      }).on('error', fallar).on('end', () => {
+        if (cortado) return;
+        const todo = new Uint8Array(total);
+        let o = 0;
+        for (const t of trozos) { todo.set(t, o); o += t.length; }
+        resolver(todo);
+      }).resume();
+    });
+  }
+
+  /* Texto e imágenes de un Word, PowerPoint, LibreOffice, HTML o .txt del ZIP */
+  async function leerDocumento(zip, ruta, tipo) {
+    if (tipo === 'html' || tipo === 'txt') {
+      const crudo = await zip.files[ruta].async('string');
+      return { texto: tipo === 'html' ? LeerTrabajos.textoDeHtml(crudo) : crudo.trim(), imagenes: [] };
     }
-    return archivos;
+    const doc = await JSZip.loadAsync(await zip.files[ruta].async('uint8array'));
+    const leer = async f => new TextDecoder().decode(await leerConTope(doc.file(f)));
+    const numero = f => parseInt((f.match(/(\d+)\.xml$/) || [])[1] || '0', 10);
+    let texto, media;
+    if (tipo === 'docx') {
+      const principal = Object.keys(doc.files).find(f => /^word\/document\d*\.xml$/.test(f));
+      if (!principal) throw new Error('sin documento');
+      if (tamanoMB(doc.files[principal]) > MAX_MB_DESCOMPRIMIDO) throw new Error('demasiado grande');
+      texto = LeerTrabajos.textoDeDocx(await leer(principal));
+      media = 'word/media/';
+    } else if (tipo === 'pptx') {
+      const diapos = Object.keys(doc.files).filter(f => /^ppt\/slides\/slide\d+\.xml$/.test(f)).sort((a, b) => numero(a) - numero(b)).slice(0, 200);
+      if (diapos.reduce((t, f) => t + tamanoMB(doc.files[f]), 0) > MAX_MB_DESCOMPRIMIDO) throw new Error('demasiado grande');
+      texto = LeerTrabajos.textoDePptx(await Promise.all(diapos.map(leer)));
+      media = 'ppt/media/';
+    } else {
+      if (!doc.file('content.xml')) throw new Error('sin contenido');
+      if (tamanoMB(doc.files['content.xml']) > MAX_MB_DESCOMPRIMIDO) throw new Error('demasiado grande');
+      texto = LeerTrabajos.textoDeOdf(await leer('content.xml'));
+      media = 'Pictures/';
+    }
+    // Sin descomprimir: fuera los adornos pequeños y lo enorme; como mucho MAX_IMAGENES_DOC
+    const imagenes = Object.keys(doc.files)
+      .filter(f => f.startsWith(media) && LeerTrabajos.tipoArchivo(f) === 'imagen')
+      .map(f => doc.files[f])
+      .filter(f => tamanoMB(f) * 1024 * 1024 >= MIN_BYTES_IMAGEN_DOC && tamanoMB(f) <= MAX_MB_DESCOMPRIMIDO)
+      .sort((a, b) => a.name.localeCompare(b.name, 'es', { numeric: true }))
+      .slice(0, MAX_IMAGENES_DOC);
+    return { texto, imagenes };
+  }
+
+  /* Lo de un alumno, de su última versión y en orden: PDF y fotos tal cual; de los documentos,
+     el texto (sin su nombre ni el de sus compañeros) y sus imágenes. Lo que no se sabe leer no gasta corrección. */
+  async function leerEntregaZip(zip, rutasAlumno, nombreAlumno, otrosNombres = []) {
+    const ultima = Math.max(...rutasAlumno.map(versionNum));
+    const rutas = rutasAlumno.filter(r => versionNum(r) === ultima)
+      .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
+    const legibles = rutas.filter(r => LeerTrabajos.tipoArchivo(r));
+    if (!legibles.length) {
+      const nombres = rutas.map(r => r.split('/').pop()).join(', ');
+      throw errorTarjeta('Formato que no sé leer', `${nombres}: pídele que lo entregue en PDF, Word o foto. No ha gastado ninguna corrección.`);
+    }
+    const archivos = [], textos = [];
+    let mb = 0;
+    const cabe = a => archivos.length < MAX_PAGINAS && mb + a.sizeMB <= MAX_MB_ARCHIVO;
+    for (const ruta of legibles) {
+      const tipo = LeerTrabajos.tipoArchivo(ruta);
+      if (tamanoMB(zip.files[ruta]) > MAX_MB_DESCOMPRIMIDO) {
+        throw errorTarjeta('Archivo grande', `${ruta.split('/').pop()} es demasiado grande. Pídeselo en PDF comprimido. No ha gastado ninguna corrección.`);
+      }
+      if (tipo === 'pdf' || tipo === 'imagen') {
+        const a = await leerArchivoZip(zip, ruta);
+        if (!cabe(a)) {
+          if (!archivos.length && !textos.length) {
+            throw errorTarjeta('Archivo grande', `El PDF ocupa ${a.sizeMB.toFixed(1)} MB y el máximo es ${MAX_MB_ARCHIVO} MB. Exporta el PDF comprimido o como fotos.`);
+          }
+          break;
+        }
+        mb += a.sizeMB;
+        archivos.push({ base64: a.base64, tipo: a.tipo });
+        continue;
+      }
+      let doc;
+      try {
+        doc = await leerDocumento(zip, ruta, tipo);
+      } catch (e) {
+        const grande = e.message === 'demasiado grande';
+        throw errorTarjeta(grande ? 'Archivo grande' : 'No se puede abrir',
+          `${ruta.split('/').pop()} ${grande ? 'es demasiado grande' : 'no se puede abrir (¿está dañado o protegido con contraseña?)'}. Pídeselo en PDF. No ha gastado ninguna corrección.`);
+      }
+      if (doc.texto) textos.push(doc.texto.slice(0, MAX_TEXTO));   // recortado antes de anonimizar: nada enorme
+      for (const f of doc.imagenes) {
+        let bytes;
+        try { bytes = await leerConTope(f); } catch (_) { continue; }
+        const ext = f.name.split('.').pop().toLowerCase();
+        const img = await prepararImagen(new Blob([bytes], { type: ext === 'jpg' ? 'image/jpeg' : `image/${ext}` }));
+        const a = { ...img, sizeMB: img.base64.length * 3 / 4 / 1024 / 1024 };
+        if (!cabe(a)) break;
+        mb += a.sizeMB;
+        archivos.push({ base64: a.base64, tipo: a.tipo });
+      }
+    }
+    let texto = '';
+    if (textos.length) {
+      const cuerpo = textos.length === 1 ? textos[0] : textos.map((t, n) => `Documento ${n + 1}:\n${t}`).join('\n\n');
+      texto = '(Texto sacado de un documento: no se conserva el formato.' +
+        (archivos.length ? ' Las imágenes del trabajo van a continuación.' : '') + ')\n\n' +
+        LeerTrabajos.anonimizar(cuerpo.slice(0, MAX_TEXTO), nombreAlumno, otrosNombres);
+      const maximo = archivos.length ? MAX_TEXTO_CON_IMAGENES : MAX_TEXTO;
+      if (texto.length > maximo) texto = texto.slice(0, maximo) + '\n\n[… el resto del texto se ha recortado por largo]';
+    }
+    if (!texto && !archivos.length) {
+      throw errorTarjeta('Documento vacío', 'No he encontrado texto ni imágenes en su entrega. Ábrela tú y, si hace falta, pídesela en PDF. No ha gastado ninguna corrección.');
+    }
+    return { archivos, texto };
+  }
+
+  /* Resumen antes de gastar correcciones: lo emparejado, lo que el profe tiene que elegir y
+     quién no ha entregado. Devuelve los archivos de cada alumno, o null si cancela. */
+  let alResolverResumen = null;
+  function confirmarEmparejado(emp, alumnos) {
+    const legible = rs => (rs || []).some(r => LeerTrabajos.tipoArchivo(r));
+    const quienes = p => p.candidatos.map(i => alumnos[i].nombre).join(', ');
+    const MOTIVOS = {
+      parcial: p => `¿Es de ${quienes(p)}? El nombre no coincide del todo.`,
+      extra: p => `¿Es de ${quienes(p)}? En el nombre hay palabras de más: puede ser otra persona.`,
+      varios: p => `Encaja con varios alumnos: ${quienes(p)}.`,
+      repetido: p => `Encaja con ${quienes(p)}, igual que otra entrega. ¿Cuál es la suya?`,
+      desconocido: () => 'No encaja con nadie de la lista.',
+    };
+    const opciones = (sugerido, candidatos) => {
+      const orden = [...candidatos, ...alumnos.map((_, i) => i).filter(i => !candidatos.includes(i))];
+      return `<option value="">No corregir</option>` + orden.map(i =>
+        `<option value="${i}"${i === sugerido ? ' selected' : ''}>${esc(alumnos[i].nombre)}</option>`).join('');
+    };
+    const revisar = emp.porRevisar.map((p, k) => `
+      <div class="sin-identificar-item">
+        <span class="que">📄 <strong>${esc(p.etiqueta)}</strong> · ${p.rutas.length} ${p.rutas.length === 1 ? 'archivo' : 'archivos'}<br><small>${esc(MOTIVOS[p.motivo](p))}</small></span>
+        <select data-revisar="${k}" aria-label="De quién es ${esc(p.etiqueta)}">${opciones(p.sugerido, p.candidatos)}</select>
+      </div>`).join('');
+    const sinEntrega = emp.sinEntrega.map(i => alumnos[i].nombre);
+    abrirModal(`
+      <h3>Antes de corregir</h3>
+      <div id="resumenEmparejado" class="resumen-emparejado"></div>
+      ${revisar ? `<div><strong>Revisa de quién son (${emp.porRevisar.length})</strong>
+        <p class="resumen-ayuda">No los adivino: elige el alumno o déjalos sin corregir.</p>
+        <div class="sin-identificar">${revisar}</div></div>` : ''}
+      ${sinEntrega.length ? `<details><summary>${sinEntrega.length} sin entrega (no gastan correcciones)</summary>
+        <p class="resumen-ayuda">${sinEntrega.map(esc).join(', ')}</p></details>` : ''}
+      <div class="modal-actions">
+        <button class="btn btn-secondary btn-sm" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn btn-primary btn-sm" id="btnConfirmarEmparejado">Corregir</button>
+      </div>`);
+
+    const elecciones = () => Object.fromEntries([...document.querySelectorAll('[data-revisar]')]
+      .map(s => [emp.porRevisar[s.dataset.revisar].id, s.value === '' ? null : Number(s.value)]));
+    const pintar = () => {
+      const final = LeerTrabajos.resolverEntregas(emp, elecciones());
+      const conTrabajo = alumnos.filter((_, i) => legible(final[i])).length;
+      const ilegibles = alumnos.filter((_, i) => final[i]?.length && !legible(final[i])).map(a => a.nombre);
+      const saldo = perfil?.creditos;
+      document.getElementById('resumenEmparejado').innerHTML =
+        `<div>✔ <strong>${conTrabajo}</strong> ${conTrabajo === 1 ? 'trabajo listo' : 'trabajos listos'} para corregir.</div>` +
+        (ilegibles.length ? `<div class="resumen-aviso">⚠️ Formato que no sé leer (.doc antiguo, .pages…), no gastan corrección: ${ilegibles.map(esc).join(', ')}</div>` : '') +
+        (typeof saldo === 'number' ? `<div class="resumen-ayuda">Gastarás ${conTrabajo} ${conTrabajo === 1 ? 'corrección' : 'correcciones'}; te quedan ${saldo}.` +
+          (saldo < conTrabajo ? ' <strong>No llegan para todos: se corregirá hasta agotar el saldo.</strong>' : '') + '</div>' : '');
+      const btn = document.getElementById('btnConfirmarEmparejado');
+      btn.textContent = `Corregir ${conTrabajo}`;
+      btn.disabled = !conTrabajo;
+      return final;
+    };
+    pintar();
+    document.querySelectorAll('[data-revisar]').forEach(s => s.addEventListener('change', pintar));
+    return new Promise(resolve => {
+      alResolverResumen = resolve;
+      document.getElementById('btnConfirmarEmparejado').addEventListener('click', () => {
+        const final = pintar();
+        alResolverResumen = null;
+        cerrarModal();
+        resolve(final);
+      });
+    });
   }
 
   async function corregirClase() {
@@ -1913,27 +2076,33 @@
     const datos = datosFormulario();
     if (!datos) return;
     const alumnos = await alumnosParaCorregir();
-    if (!alumnos || !confirmarCreditos(alumnos.length)) return;
-    guardarRubricaEnTarea(datos.rubrica);
+    if (!alumnos) return;
 
     let zip, rutas;
     try {
-      updateProgress('Abriendo el ZIP…', 0, 0);
       zip = await JSZip.loadAsync(zipFile);
       rutas = filtrarPorTarea(
-        Object.keys(zip.files).filter(r => !zip.files[r].dir && EXT_VALIDAS.test(r) && !r.startsWith('__MACOSX')),
+        Object.keys(zip.files).filter(r => !zip.files[r].dir && LeerTrabajos.tipoArchivo(r) !== 'ignorar'),
         datos.taskName);
     } catch (e) {
       return showToast('No se pudo abrir el ZIP: ' + e.message, 'error');
     }
+    if (!rutas.length) return showToast('El ZIP no tiene ningún archivo', 'error');
 
-    await ejecutarCorreccion(alumnos.map(alumno => ({
+    const porAlumno = await confirmarEmparejado(LeerTrabajos.emparejarEntregas(rutas, alumnos, { tarea: datos.taskName }), alumnos);
+    if (!porAlumno) return;
+    guardarRubricaEnTarea(datos.rubrica);
+
+    await ejecutarCorreccion(alumnos.map((alumno, i) => ({
       alumno, result: null, estado: 'pendiente',
       corregir: async () => {
-        const rutasAlumno = buscarArchivosAlumno(rutas, alumno.nombre);
-        if (!rutasAlumno.length) throw errorTarjeta('Sin entrega', 'No hay ningún archivo de este alumno en el ZIP.', 'SIN_ENTREGA');
-        const archivos = await leerEntregaZip(zip, rutasAlumno);
-        return api('corregir', { archivos, curso: datos.curso, nombre_tarea: datos.taskName, rubrica: datos.rubrica });
+        const suyas = porAlumno[i] || [];
+        if (!suyas.length) throw errorTarjeta('Sin entrega', 'No hay ningún archivo de este alumno en el ZIP.', 'SIN_ENTREGA');
+        const { archivos, texto } = await leerEntregaZip(zip, suyas, alumno.nombre, alumnos.filter(a => a !== alumno).map(a => a.nombre));
+        return api('corregir', {
+          archivos, ...(texto ? { texto_tarea: texto } : {}),
+          curso: datos.curso, nombre_tarea: datos.taskName, rubrica: datos.rubrica,
+        });
       },
     })));
   }
