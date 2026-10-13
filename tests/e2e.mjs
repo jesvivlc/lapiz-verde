@@ -118,9 +118,10 @@ async function prepararRuta(route) {
     if (m === 'POST' || m === 'PATCH') {
       const b = req.postDataJSON();
       if (tabla === 'notas') upserts.push(b);
-      if (tabla === 'alumnos' && m === 'POST') {   // alta desde el Corrector: devuelve las filas creadas (no se guardan en db)
+      if (tabla === 'alumnos' && m === 'POST' && (Array.isArray(b) ? b : [b])[0]?.grupo_id !== 'g-1') {   // alta desde el Corrector en otro grupo
         const filas = (Array.isArray(b) ? b : [b]).map((a, k) => ({ id: `n-${altasAlumnos.length + k}`, email: null, ...a }));
         altasAlumnos.push(...filas);
+        db.alumnos.push(...filas);
         return json(filas, 201);
       }
       if (m === 'PATCH') {
@@ -371,9 +372,14 @@ console.log('== Una sola zona: grupo vacío, archivos sueltos, fotos sin nombre 
   await page.screenshot({ path: OUT + '4c-lista.png', fullPage: true });
   await page.click('#btnCrearLista');
   await page.waitForSelector('#btnConfirmarEmparejado');
-  ok(altasAlumnos.length === 4 && altasAlumnos.every(a => a.grupo_id === 'g-2') && altasAlumnos.some(a => a.nombre === 'Ana' && a.apellidos === 'García Pérez'), 'los da de alta en el grupo, con nombre y apellidos');
+  ok(altasAlumnos.length === 4 && altasAlumnos.every(a => a.grupo_id === 'g-2' && /^[0-9a-f-]{36}$/.test(a.id)) && altasAlumnos.some(a => a.nombre === 'Ana' && a.apellidos === 'García Pérez'), 'los da de alta en el grupo, con nombre, apellidos y su id');
   const resumen = await page.textContent('#modalContenido');
   ok(resumen.includes('3 trabajos listos') && !resumen.includes('Revisa de quién'), 'con la lista sacada del ZIP, cada uno con lo suyo (Marta, .doc: no gasta)');
+  await page.click('#modalContenido >> text=Cancelar');
+  // Volver a corregir el mismo ZIP: los alumnos ya existen y no se duplican
+  await page.click('#btnCorregir');
+  await page.waitForSelector('#btnConfirmarEmparejado');
+  ok(altasAlumnos.length === 4, 'la segunda vez no se crean alumnos repetidos');
   await page.click('#modalContenido >> text=Cancelar');
 
   // Archivos sueltos con el nombre del alumno, sin grupo y sin Excel
@@ -402,6 +408,16 @@ console.log('== Una sola zona: grupo vacío, archivos sueltos, fotos sin nombre 
   await page.waitForTimeout(300);
   ok(correcciones.length === 3 && correcciones.some(c => c.texto_tarea?.includes('Texto de [nombre del alumno]')), `3 correcciones, el Word de Luis como texto (${correcciones.length})`);
   ok(await page.evaluate(() => cards.some(c => c.alumno.nombre === 'Sergio Vidal' && c.result)), 'Sergio tiene su tarjeta corregida');
+
+  // Un PDF sin nombre ni pegatinas: no se manda entero a nadie
+  correcciones.length = 0;
+  await page.selectOption('#selGrupo', 'g-1');
+  await page.waitForFunction(() => alumnosGrupoCargado === 'g-1');
+  await page.selectOption('#selTarea', 't-1');
+  await page.setInputFiles('#trabajosFile', [{ name: 'escaneo-sin-pegatinas.pdf', mimeType: 'application/pdf', buffer: await (async () => { const g = await (await browser.newContext()).newPage(); await g.setContent('<p>Libretas sin pegatina</p>'); return g.pdf(); })() }]);
+  await page.click('#btnCorregir');
+  await page.waitForFunction(() => /ninguna pegatina QR/.test(document.getElementById('toast').textContent), null, { timeout: 60000 });
+  ok(correcciones.length === 0 && await page.isHidden('#btnConfirmarEmparejado').catch(() => true), 'PDF sin pegatinas ni nombres: avisa y no ofrece mandarlo a nadie');
 
   // Fotos del móvil sin nombre ni pegatina: el profe dice de quién es cada una
   correcciones.length = 0;
@@ -545,6 +561,21 @@ console.log('== Escaneo de libretas con pegatinas QR ==');
   ok(paginas === '1,2' && correcciones.every(c => c.archivos.every(a => a.tipo === 'jpeg')), 'Ana: su pegatina y la página siguiente (2 páginas); Marta: 1 página');
   ok((await page.textContent('#statsBar')).includes('2 sin entrega'), 'Luis y Sara salen como sin entrega');
   await page.screenshot({ path: OUT + '9-escaneo.png', fullPage: true });
+  const tapada = await page.evaluate(async () => {
+    await cargarLibreria('qrcode');
+    const c = document.createElement('canvas'); c.width = 1200; c.height = 1600;
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+    const img = new Image(); img.src = 'data:image/svg+xml,' + encodeURIComponent(svgQR('LV1:a-1'));
+    await img.decode(); ctx.drawImage(img, 100, 100, 300, 300);
+    ctx.fillStyle = '#000'; ctx.font = '40px sans-serif'; ctx.fillText('Ana López García', 420, 260); ctx.fillText('Texto de la libreta', 100, 900);
+    const { qr, blob } = await procesarPagina(c);
+    const bmp = await createImageBitmap(blob); const d = document.createElement('canvas'); d.width = bmp.width; d.height = bmp.height;
+    const dctx = d.getContext('2d', { willReadFrequently: true }); dctx.drawImage(bmp, 0, 0);
+    const oscuro = (x, y, w, h) => { const px = dctx.getImageData(x, y, w, h).data; let n = 0; for (let i = 0; i < px.length; i += 4) if (px[i] < 128) n++; return n; };
+    const k = d.width / 1200;
+    return { qr, despues: leerQR(d), nombre: oscuro(420 * k, 210 * k, 400 * k, 70 * k), texto: oscuro(100 * k, 860 * k, 400 * k, 60 * k) };
+  });
+  ok(tapada.qr === 'LV1:a-1' && tapada.despues === null && tapada.nombre === 0 && tapada.texto > 0, 'la pegatina (QR y nombre) se tapa en la página que va a la IA; el resto, no');
   ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
 }
 

@@ -1048,6 +1048,7 @@
   let gruposCache = [];
   let tareasGrupoSel = [];
   let alumnosGrupoSel = [];
+  let alumnosGrupoCargado = null;   // id del grupo cuyos alumnos ya se han leído bien (si no, no se da nada por vacío)
 
   let grupoActual = null;      // cuaderno
   let alumnosActuales = [];
@@ -1285,6 +1286,7 @@
     const selTarea = document.getElementById('selTarea');
     tareasGrupoSel = [];
     alumnosGrupoSel = [];
+    alumnosGrupoCargado = null;
     document.getElementById('excelGroup').classList.toggle('hidden', !!grupoId);
 
     cargarBandeja();
@@ -1298,16 +1300,18 @@
     const grupo = gruposCache.find(g => g.id === grupoId);
     if (grupo?.nivel && CURSOS.some(([v]) => v === grupo.nivel)) document.getElementById('cursoForm').value = grupo.nivel;
 
-    const [{ data: tareas }, { data: alumnos }] = await Promise.all([
+    const [{ data: tareas }, { data: alumnos, error: errorAlumnos }] = await Promise.all([
       sbClient.from('tareas').select('id,titulo,rubrica,token_entrega,entrega_abierta,correccion_auto').eq('grupo_id', grupoId).order('created_at', { ascending: false }),
       sbClient.from('alumnos').select('id,nombre,apellidos,email').eq('grupo_id', grupoId).eq('activo', true).order('apellidos').order('nombre'),
     ]);
     tareasGrupoSel = tareas || [];
+    if (document.getElementById('selGrupo').value !== grupoId) return;   // ha cambiado de grupo mientras tanto
     alumnosGrupoSel = (alumnos || []).map(a => ({
       id: a.id,
       nombre: [a.nombre, a.apellidos].filter(Boolean).join(' '),
       email: a.email || '',
     }));
+    if (!errorAlumnos) alumnosGrupoCargado = grupoId;
 
     selTarea.disabled = false;
     selTarea.innerHTML = `<option value="">— Elige tarea —</option>` +
@@ -1394,7 +1398,12 @@
     ponerTrabajos([...input.files].map(f => ({ ruta: f.webkitRelativePath || f.name, file: f })));
   }
 
+  function avisarTope() {
+    showToast(`Hay más de ${MAX_ARCHIVOS_SOLTADOS} archivos: solo uso los ${MAX_ARCHIVOS_SOLTADOS} primeros. Corrige la clase en dos veces.`, 'warning');
+  }
+
   function ponerTrabajos(lista) {
+    if (lista.length > MAX_ARCHIVOS_SOLTADOS) { lista = lista.slice(0, MAX_ARCHIVOS_SOLTADOS); avisarTope(); }
     trabajos = lista.filter(t => LeerTrabajos.tipoArchivo(t.ruta) !== 'ignorar');
     if (!trabajos.length) return showToast('No hay ningún archivo', 'error');
     const carpetas = [...new Set(trabajos.map(t => t.ruta.split('/')[0]))];
@@ -1424,7 +1433,7 @@
   async function archivosDeEntradas(entradas) {
     const salida = [];
     async function recorrer(entrada, base) {
-      if (salida.length >= MAX_ARCHIVOS_SOLTADOS) return;
+      if (salida.length > MAX_ARCHIVOS_SOLTADOS) return;   // uno de más: ponerTrabajos avisa y recorta
       if (entrada.isFile) {
         const file = await new Promise((ok, ko) => entrada.file(ok, ko));
         salida.push({ ruta: base + file.name, file });
@@ -1432,7 +1441,7 @@
         const lector = entrada.createReader();
         for (;;) {
           const lote = await new Promise((ok, ko) => lector.readEntries(ok, ko));
-          if (!lote.length) break;
+          if (!lote.length || salida.length > MAX_ARCHIVOS_SOLTADOS) break;
           for (const e of lote) await recorrer(e, base + entrada.name + '/');
         }
       }
@@ -1452,7 +1461,9 @@
       const zip = await JSZip.loadAsync(file);
       const base = trabajos.length > 1 ? ruta.replace(/\.zip$/i, '') + '/' : '';
       for (const [r, e] of Object.entries(zip.files)) {
-        if (!e.dir && LeerTrabajos.tipoArchivo(r) !== 'ignorar') fuente.set(base + r, lectorZip(e));
+        if (e.dir || LeerTrabajos.tipoArchivo(r) === 'ignorar') continue;
+        if (fuente.size >= MAX_ARCHIVOS_SOLTADOS) { avisarTope(); return fuente; }
+        fuente.set(base + r, lectorZip(e));
       }
     }
     return fuente;
@@ -2116,13 +2127,13 @@
   }
 
   /* Grupo sin alumnos o sin Excel: la lista sale de los nombres de los trabajos. Con grupo se guarda en él. */
-  function crearListaDesdeTrabajos(rutas) {
+  function crearListaDesdeTrabajos(rutas, grupoId) {
     const nombres = LeerTrabajos.nombresDeRutas(rutas);
     if (!nombres.length) {
       showToast('No encuentro nombres de alumnos en los archivos. Importa la lista en el Cuaderno o sube un Excel.', 'error');
       return Promise.resolve(null);
     }
-    const grupo = gruposCache.find(g => g.id === document.getElementById('selGrupo').value);
+    const grupo = gruposCache.find(g => g.id === grupoId);
     abrirModal(`
       <h3>Tu lista de alumnos</h3>
       <p class="resumen-ayuda">${grupo ? `«${esc(grupo.nombre)}» todavía no tiene alumnos.` : 'No hay lista de alumnos.'}
@@ -2141,22 +2152,43 @@
         if (!elegidos.length) return showToast('Marca al menos un alumno', 'error');
         alResolverResumen = null;
         cerrarModal();
-        resolve(grupo ? await guardarAlumnos(grupo.id, elegidos) : elegidos.map(a => ({ nombre: `${a.nombre} ${a.apellidos}`.trim(), email: '' })));
+        resolve(grupo ? (await guardarAlumnos(grupo.id, elegidos))?.lista ?? null : elegidos.map(a => ({ nombre: `${a.nombre} ${a.apellidos}`.trim(), email: '' })));
       });
     });
   }
 
-  /* Da de alta alumnos en el grupo del Corrector y devuelve la lista completa, o null si falla */
+  /* Da de alta alumnos en el grupo del Corrector. Los que ya estaban (también dados de baja) no se
+     repiten: se reactivan. Devuelve { lista: alumnos del grupo, ids: el id de cada uno de `nuevos` }, o null si falla.
+     Los ids se generan aquí para emparejar cada alumno con sus archivos sin depender del orden. */
   async function guardarAlumnos(grupoId, nuevos) {
-    const { data, error } = await sbClient.from('alumnos')
-      .insert(nuevos.map(a => ({ grupo_id: grupoId, nombre: a.nombre, apellidos: a.apellidos || null, activo: true })))
-      .select('id,nombre,apellidos,email');
-    if (error) { showToast('No se pudieron guardar los alumnos: ' + error.message, 'error'); return null; }
-    alumnosGrupoSel = [...alumnosGrupoSel, ...(data || []).map(a => ({
-      id: a.id, nombre: [a.nombre, a.apellidos].filter(Boolean).join(' '), email: a.email || '',
-    }))];
-    actualizarBadgeAlumnos();
-    return alumnosGrupoSel;
+    const clave = a => LeerTrabajos.palabras(`${a.nombre} ${a.apellidos || ''}`).sort().join(' ');
+    const { data: existentes, error: e1 } = await sbClient.from('alumnos').select('id,nombre,apellidos,activo').eq('grupo_id', grupoId);
+    if (e1) { showToast('No se pudieron leer los alumnos del grupo: ' + e1.message, 'error'); return null; }
+    const porClave = new Map((existentes || []).map(a => [clave(a), a]));
+    const altas = [], reactivar = [];
+    const ids = nuevos.map(n => {
+      const ya = porClave.get(clave(n));
+      if (ya) { if (!ya.activo) reactivar.push(ya.id); return ya.id; }
+      const fila = { id: crypto.randomUUID(), grupo_id: grupoId, nombre: n.nombre, apellidos: n.apellidos || null, activo: true };
+      porClave.set(clave(n), { ...fila });
+      altas.push(fila);
+      return fila.id;
+    });
+    if (altas.length) {
+      const { error } = await sbClient.from('alumnos').insert(altas);
+      if (error) { showToast('No se pudieron guardar los alumnos: ' + error.message, 'error'); return null; }
+    }
+    if (reactivar.length) {
+      const { error } = await sbClient.from('alumnos').update({ activo: true }).in('id', reactivar);
+      if (error) { showToast('No se pudieron reactivar los alumnos: ' + error.message, 'error'); return null; }
+    }
+    const { data, error } = await sbClient.from('alumnos').select('id,nombre,apellidos,email').eq('grupo_id', grupoId).eq('activo', true).order('apellidos').order('nombre');
+    if (error) { showToast('No se pudo leer la lista nueva: ' + error.message, 'error'); return null; }
+    if (document.getElementById('selGrupo').value === grupoId) {
+      alumnosGrupoSel = (data || []).map(a => ({ id: a.id, nombre: [a.nombre, a.apellidos].filter(Boolean).join(' '), email: a.email || '' }));
+      actualizarBadgeAlumnos();
+    }
+    return { lista: (data || []).map(a => ({ id: a.id, nombre: [a.nombre, a.apellidos].filter(Boolean).join(' '), email: a.email || '' })), ids };
   }
 
   async function corregirClase() {
@@ -2166,8 +2198,11 @@
     }
     const datos = datosFormulario();
     if (!datos) return;
+    const grupoId = document.getElementById('selGrupo').value;   // fijo para toda la corrección
+    if (grupoId && alumnosGrupoCargado !== grupoId) return showToast('Espera un momento: estoy cargando los alumnos del grupo', 'warning');
     let alumnos = await alumnosParaCorregir();
     if (!alumnos) return;
+    alumnos = alumnos.slice();
 
     let fuente, rutas;
     try {
@@ -2182,12 +2217,18 @@
     // Ningún nombre encaja y son PDF o fotos: ¿libretas escaneadas con pegatina QR?
     const conNombre = emp && (Object.keys(emp.asignados).length || emp.porRevisar.some(p => p.motivo !== 'desconocido'));
     const soloPapel = rutas.every(r => ['pdf', 'imagen'].includes(LeerTrabajos.tipoArchivo(r)));
-    if (!conNombre && soloPapel && alumnosGrupoSel.length && document.getElementById('selGrupo').value) {
-      const archivos = await Promise.all(rutas.map(async r => fuente.get(r).file ?? new File([await fuente.get(r).uint8()], r.split('/').pop())));
+    if (!conNombre && soloPapel && alumnos.length && grupoId) {
+      if (rutas.some(r => fuente.get(r).mb() > MAX_MB_DESCOMPRIMIDO)) return showToast('Hay un archivo demasiado grande. Escanéalo en varias partes.', 'error');
+      const archivos = [];
+      for (const r of rutas) archivos.push(fuente.get(r).file ?? new File([await fuente.get(r).uint8()], r.split('/').pop()));
       if (await corregirEscaneo(archivos, datos)) return;
+      // Sin ninguna pegatina: un PDF puede ser el escaneo de varias libretas; no se manda entero a nadie
+      if (rutas.some(r => LeerTrabajos.tipoArchivo(r) === 'pdf')) {
+        return showToast('No he encontrado ninguna pegatina QR de este grupo. Si son libretas escaneadas, ¿es el grupo correcto? Si son trabajos sueltos, pon el nombre del alumno en cada archivo.', 'error');
+      }
     }
     if (!alumnos.length) {
-      alumnos = await crearListaDesdeTrabajos(rutas);
+      alumnos = await crearListaDesdeTrabajos(rutas, grupoId);
       if (!alumnos) return;
       emp = LeerTrabajos.emparejarEntregas(rutas, alumnos, { tarea: datos.taskName });
     }
@@ -2196,13 +2237,30 @@
     if (!elegido) return;
     const porAlumno = elegido.final;
     if (elegido.nuevos.length) {
-      // Alumnos que no estaban en la lista (alguien nuevo en clase): al grupo, o solo para esta corrección
-      const grupoId = document.getElementById('selGrupo').value;
-      const antes = alumnos.length;
-      const conDatos = grupoId ? await guardarAlumnos(grupoId, elegido.nuevos) : [...alumnos, ...elegido.nuevos.map(a => ({ nombre: `${a.nombre} ${a.apellidos}`.trim(), email: '' }))];
-      if (!conDatos) return;
-      alumnos = conDatos;
-      elegido.nuevos.forEach((n, k) => { porAlumno[antes + k] = n.rutas; });
+      // Alumnos que no estaban en la lista (alguien nuevo en clase): al grupo, o solo para esta corrección.
+      // Los archivos se pasan por alumno (id o nombre), no por posición.
+      const rutasDe = new Map();
+      if (grupoId) {
+        const r = await guardarAlumnos(grupoId, elegido.nuevos);
+        if (!r) return;
+        const antiguas = new Map(alumnos.map((a, i) => [a.id, porAlumno[i]]));
+        r.ids.forEach((id, k) => rutasDe.set(id, [...(rutasDe.get(id) || []), ...elegido.nuevos[k].rutas]));
+        alumnos = r.lista;
+        const nuevoPor = {};
+        alumnos.forEach((a, i) => {
+          const suyas = [...(antiguas.get(a.id) || []), ...(rutasDe.get(a.id) || [])];
+          if (suyas.length) nuevoPor[i] = suyas;
+        });
+        Object.keys(porAlumno).forEach(k => delete porAlumno[k]);
+        Object.assign(porAlumno, nuevoPor);
+      } else {
+        for (const n of elegido.nuevos) {
+          const nombre = `${n.nombre} ${n.apellidos}`.trim();
+          let i = alumnos.findIndex(a => a.nombre === nombre);
+          if (i < 0) { alumnos.push({ nombre, email: '' }); i = alumnos.length - 1; }
+          porAlumno[i] = [...(porAlumno[i] || []), ...n.rutas];
+        }
+      }
     }
     guardarRubricaEnTarea(datos.rubrica);
 
@@ -2504,19 +2562,37 @@
       const c = reducirCanvas(canvas, lado);
       const d = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, c.width, c.height);
       const r = jsQR(d.data, d.width, d.height, { inversionAttempts: 'dontInvert' });
-      if (r?.data) return r.data;
+      if (r?.data) return { data: r.data, sitio: r.location, escala: canvas.width / c.width };
       if (c === canvas) break;
     }
     return null;
   }
 
+  /* La pegatina lleva el nombre del alumno al lado del QR: se tapa en blanco antes de mandar la página a la IA.
+     Se usa la orientación del QR (el escaneo puede venir girado): el nombre queda a su derecha. */
+  function taparPegatina(canvas, { sitio, escala }) {
+    const p = k => ({ x: sitio[k].x * escala, y: sitio[k].y * escala });
+    const tl = p('topLeftCorner'), tr = p('topRightCorner'), bl = p('bottomLeftCorner');
+    const u = { x: tr.x - tl.x, y: tr.y - tl.y }, v = { x: bl.x - tl.x, y: bl.y - tl.y };
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    [[-0.25, -0.3], [2.6, -0.3], [2.6, 1.3], [-0.25, 1.3]].forEach(([a, b], k) => {
+      const x = tl.x + a * u.x + b * v.x, y = tl.y + a * u.y + b * v.y;
+      if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+    });
+    ctx.closePath();
+    ctx.fill();
+  }
+
   /* De cada página solo se guarda un JPEG ligero y la pegatina leída: así caben 30 libretas en memoria */
   async function procesarPagina(canvas) {
     const qr = leerQR(canvas);
+    if (qr) taparPegatina(canvas, qr);
     const peque = reducirCanvas(canvas, MAX_LADO_IMAGEN);
     const blob = await new Promise(r => peque.toBlob(r, 'image/jpeg', 0.8));
     canvas.width = canvas.height = 0;
-    return { qr, blob };
+    return { qr: qr?.data ?? null, blob };
   }
 
   async function leerPaginasEscaneo(files, avisar) {
