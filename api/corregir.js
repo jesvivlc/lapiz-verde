@@ -14,7 +14,8 @@ const client = new Anthropic();
 // Límites para que una sola corrección no cueste mucho más de lo que se cobra
 const LIMITES = { nombre_tarea: 200, rubrica: 6000, texto_tarea: 40000 };
 
-/** Bloques del trabajo a partir del cuerpo: `archivos` (varios), `archivo_base64` (uno) o `texto_tarea` */
+/** Bloques del trabajo a partir del cuerpo: `texto_tarea` (p. ej. el texto de un Word) y/o
+    `archivos` (varios: PDF, fotos o las imágenes de ese Word) o `archivo_base64` (uno) */
 function trabajoDelCuerpo(body) {
   const { texto_tarea, archivo_base64, tipo_archivo } = body;
   let archivos = Array.isArray(body.archivos) ? body.archivos : [];
@@ -24,17 +25,17 @@ function trabajoDelCuerpo(body) {
   if (archivos.length > MAX_ARCHIVOS) {
     throw new ErrorHttp(400, `Como máximo ${MAX_ARCHIVOS} archivos o páginas por alumno.`);
   }
-  if (archivos.length) {
-    for (const a of archivos) {
-      if (!a || typeof a.base64 !== 'string' || !a.base64.trim()) throw new ErrorHttp(400, 'Hay un archivo vacío.');
-      if (!TIPOS_ARCHIVO_VALIDOS.includes(a.tipo)) {
-        throw new ErrorHttp(400, `El campo "tipo_archivo" debe ser uno de: ${TIPOS_ARCHIVO_VALIDOS.join(', ')}`);
-      }
+  for (const a of archivos) {
+    if (!a || typeof a.base64 !== 'string' || !a.base64.trim()) throw new ErrorHttp(400, 'Hay un archivo vacío.');
+    if (!TIPOS_ARCHIVO_VALIDOS.includes(a.tipo)) {
+      throw new ErrorHttp(400, `El campo "tipo_archivo" debe ser uno de: ${TIPOS_ARCHIVO_VALIDOS.join(', ')}`);
     }
-    return archivos.map((a) => bloqueDeArchivo(a.base64, a.tipo));
   }
-  if (texto_tarea && String(texto_tarea).trim() !== '') return [{ type: 'text', text: String(texto_tarea) }];
-  throw new ErrorHttp(400, 'Debes enviar texto_tarea o archivo_base64 (con tipo_archivo).');
+  const bloques = [];
+  if (texto_tarea && String(texto_tarea).trim() !== '') bloques.push({ type: 'text', text: String(texto_tarea) });
+  bloques.push(...archivos.map((a) => bloqueDeArchivo(a.base64, a.tipo)));
+  if (!bloques.length) throw new ErrorHttp(400, 'Debes enviar texto_tarea o archivo_base64 (con tipo_archivo).');
+  return bloques;
 }
 
 export default async function handler(req, res) {
