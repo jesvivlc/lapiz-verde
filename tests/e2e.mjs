@@ -212,7 +212,7 @@ console.log('== Con sesión: corregir con grupo del cuaderno (ZIP de Teams) ==')
   await page.selectOption('#selGrupo', 'g-1');
   await page.waitForFunction(() => !document.getElementById('selTarea').disabled);
   ok(await page.isHidden('#excelGroup'), 'con grupo elegido, el Excel se oculta');
-  await page.click('text=▶ Cómo funciona (30 s)');
+  await page.click('text=▶ Cómo funciona (36 s)');
   await page.waitForFunction(() => document.querySelector('#modalContenido video')?.readyState >= 1);
   ok(true, 'dentro de la app, «Cómo funciona» abre el vídeo y carga');
   await page.click('#modalContenido >> text=Cerrar');
