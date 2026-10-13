@@ -115,6 +115,11 @@ console.log('== Exportar el cuaderno a Excel ==');
   const usados = new Set();
   ok(nombreHoja('3.º ESO A/B: [mañana]', usados) === '3.º ESO A B mañana' && nombreHoja('3.º ESO A/B: [mañana]', usados) === '3.º ESO A B mañana (2)', 'nombres de hoja válidos y sin repetir');
   ok(nombreHoja('x'.repeat(40), usados).length === 31, 'como mucho 31 caracteres');
+  ok(nombreHoja("'Bilingüe'", usados) === 'Bilingüe' && nombreHoja('History', usados) === 'History (2)', 'sin apóstrofos en los extremos ni el nombre reservado «History»');
+  const trampa = hojasCuaderno({ alumnos: [{ id: 'x', nombre: '@Ana', apellidos: '=HYPERLINK("http://x")' }], tareas: [{ id: 't', titulo: '+SUMA(A1)' }],
+    notas: [{ alumno_id: 'x', tarea_id: 't', nota: 5, comentario_ia: '-1+2', origen: 'markmate' }] });
+  ok(trampa.notas[1][0] === `'=HYPERLINK("http://x")` && trampa.notas[1][1] === "'@Ana" && trampa.notas[0][2] === "'+SUMA(A1)" && trampa.comentarios[1][5] === "'-1+2" && trampa.notas[1][2] === 5,
+    'lo que parece fórmula se neutraliza; los números siguen siendo números');
 }
 
 console.log(fallos ? `\n${fallos} FALLOS` : '\nTodo correcto');

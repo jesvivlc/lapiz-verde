@@ -209,6 +209,10 @@
   }
 
   /* ── Exportar el cuaderno a Excel ── */
+  /* Un texto que empieza por = + - @ se volvería fórmula si la hoja se edita o se guarda como CSV */
+  function sinFormula(v) {
+    return typeof v === 'string' ? v.replace(/^[=+\-@\t\r]/, "'$&") : v;
+  }
   function nombreEvaluacion(e) {
     return /^\d$/.test(String(e)) ? `${e}.ª evaluación` : String(e);
   }
@@ -268,14 +272,18 @@
         return [a.apellidos || '', a.nombre, ...fs, fs.reduce((s, f) => s + (f || 0), 0)];
       })] : null;
 
-    return { notas: [cabecera, ...filasNotas], comentarios, faltas };
+    const limpiar = filas => filas && filas.map(f => f.map(sinFormula));
+    return { notas: limpiar([cabecera, ...filasNotas]), comentarios: limpiar(comentarios), faltas: limpiar(faltas) };
   }
 
-  /* Nombre de hoja válido para Excel: sin []:*?/\, como mucho 31 caracteres y sin repetir */
+  /* Nombre de hoja válido para Excel: sin []:*?/\ ni caracteres de control, sin apóstrofo al principio
+     ni al final, como mucho 31 caracteres, no «History» (reservado) y sin repetir */
   function nombreHoja(nombre, usados) {
-    const base = String(nombre).replace(/[\[\]:*?\/\\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 31) || 'Hoja';
+    const recortar = t => t.replace(/^['\s]+|['\s]+$/g, '');
+    const base = recortar(recortar(String(nombre).replace(/[\[\]:*?\/\\\x00-\x1f]/g, ' ').replace(/\s+/g, ' ')).slice(0, 31)) || 'Hoja';
     let n = base, k = 2;
-    while (usados.has(n.toLowerCase())) { const suf = ` (${k++})`; n = base.slice(0, 31 - suf.length) + suf; }
+    if (n.toLowerCase() === 'history') usados.add('history');
+    while (usados.has(n.toLowerCase())) { const suf = ` (${k++})`; n = recortar(base.slice(0, 31 - suf.length)) + suf; }
     usados.add(n.toLowerCase());
     return n;
   }

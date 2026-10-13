@@ -2823,10 +2823,15 @@
     if (['lapiz-verde/notas-recibidas', 'lapiz-verde/notas-error'].includes(ev.data?.tipo)) respuestaExtension?.(ev.data);
   });
 
+  /* Cuando la extensión esté publicada en la Chrome Web Store (oculta), poner aquí su dirección:
+     se instala con un clic en lugar de descargar el ZIP y activar el modo desarrollador. */
+  const URL_EXTENSION_TIENDA = null;
+
   function textoExtension() {
     return extensionLista
       ? 'La extensión está instalada. Envíale las notas, abre la página donde van y pulsa su icono → «Rellenar esta página». Solo rellena: tú revisas y guardas.'
-      : 'Rellena las notas en la página que tengas abierta (Classroom, ITACA, Séneca, Aules…), como si las teclearas tú. Instálala una vez en tu ordenador: descárgala y sigue el LEEME.';
+      : 'Rellena las notas en la página que tengas abierta (Classroom, ITACA, Séneca, Aules…), como si las teclearas tú. Instálala una vez en tu ordenador: ' +
+        (URL_EXTENSION_TIENDA ? 'es un clic en la Chrome Web Store.' : 'descárgala y sigue el LEEME.');
   }
 
   /* Excel con el cuaderno de un grupo, o de todos (grupo = null): copia de seguridad y para llevárselo */
@@ -2835,7 +2840,8 @@
     try {
       let grupos = grupo ? [grupo] : null;
       if (!grupos) {
-        const { data, error } = await sbClient.from('grupos').select('id,nombre').order('nombre');
+        // Además de la RLS, solo lo propio: el archivo nunca debe llevar alumnos de otro profesor
+        const { data, error } = await sbClient.from('grupos').select('id,nombre').eq('owner_id', usuario.id).order('nombre');
         if (error) throw error;
         grupos = data || [];
       }
@@ -2845,8 +2851,8 @@
       const comentarios = [];
       for (const g of grupos) {
         const [{ data: alumnos, error: eA }, { data: tareas, error: eT }] = await Promise.all([
-          sbClient.from('alumnos').select('id,nombre,apellidos').eq('grupo_id', g.id).eq('activo', true).order('apellidos').order('nombre'),
-          sbClient.from('tareas').select('id,titulo,evaluacion').eq('grupo_id', g.id).order('created_at'),
+          sbClient.from('alumnos').select('id,nombre,apellidos').eq('grupo_id', g.id).eq('owner_id', usuario.id).eq('activo', true).order('apellidos').order('nombre'),
+          sbClient.from('tareas').select('id,titulo,evaluacion').eq('grupo_id', g.id).eq('owner_id', usuario.id).order('created_at'),
         ]);
         if (eA) throw eA;
         if (eT) throw eT;
@@ -2854,7 +2860,7 @@
         if (alumnos?.length && tareas?.length) {
           const { data, error } = await sbClient.from('notas')
             .select('alumno_id,tarea_id,nota,faltas,comentario_ia,mejoras_ia,mensaje_motivador,comentario_profesor,origen,corregido_at')
-            .in('alumno_id', alumnos.map(a => a.id)).in('tarea_id', tareas.map(t => t.id));
+            .eq('owner_id', usuario.id).in('alumno_id', alumnos.map(a => a.id)).in('tarea_id', tareas.map(t => t.id));
           if (error) throw error;
           notas = data || [];
         }
@@ -2873,7 +2879,7 @@
       const fecha = new Date().toISOString().slice(0, 10);
       const nombre = `Cuaderno ${grupo ? grupo.nombre : 'completo'} ${fecha}.xlsx`.replace(/[\\/:*?"<>|]/g, '-');
       XLSX.writeFile(wb, nombre, { compression: true });
-      showToast('⬇️ Descargado: ' + nombre, 'success');
+      showToast(`⬇️ Descargado «${nombre}». Lleva datos de tus alumnos: guárdalo en tu ordenador, no en uno compartido.`, 'success');
     } catch (e) {
       showToast('No se pudo exportar: ' + e.message, 'error');
     } finally {
@@ -2909,7 +2915,9 @@
         <strong>Extensión «Pasar notas»: Classroom, ITACA, Séneca…</strong>
         <p id="pnExtTexto">${textoExtension()}</p>
         <button class="btn btn-primary btn-sm" onclick="enviarAExtension(this)">Enviar a la extensión</button>
-        <button class="btn btn-secondary btn-sm" onclick="descargarExtension(this)">⬇️ Descargar la extensión</button>
+        ${URL_EXTENSION_TIENDA
+          ? `<a class="btn btn-secondary btn-sm" href="${esc(URL_EXTENSION_TIENDA)}" target="_blank" rel="noopener">🧩 Instalar la extensión</a>`
+          : '<button class="btn btn-secondary btn-sm" onclick="descargarExtension(this)">⬇️ Descargar la extensión</button>'}
       </div>
       <div class="pn-opcion">
         <strong>Copiar y pegar</strong>
@@ -3006,7 +3014,8 @@
     }
   }
 
-  const ARCHIVOS_EXTENSION = ['manifest.json', 'fondo.js', 'puente.js', 'popup.html', 'popup.js', 'rellenar.js', 'LEEME.txt'];
+  const ARCHIVOS_EXTENSION = ['manifest.json', 'fondo.js', 'puente.js', 'popup.html', 'popup.js', 'rellenar.js', 'LEEME.txt',
+    'iconos/icono-16.png', 'iconos/icono-32.png', 'iconos/icono-48.png', 'iconos/icono-128.png'];
 
   async function descargarExtension(btn) {
     btn.disabled = true;
@@ -3016,7 +3025,7 @@
       for (const nombre of ARCHIVOS_EXTENSION) {
         const r = await fetch('extension/' + nombre);
         if (!r.ok) throw new Error('No se pudo descargar la extensión. Inténtalo de nuevo.');
-        carpeta.file(nombre, await r.text());
+        carpeta.file(nombre, nombre.endsWith('.png') ? await r.arrayBuffer() : await r.text());
       }
       const blob = await zip.generateAsync({ type: 'blob' });
       const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'pasar-notas.zip' });

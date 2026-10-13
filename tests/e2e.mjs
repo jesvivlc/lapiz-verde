@@ -51,10 +51,10 @@ async function prepararRuta(route) {
   if (url.host === 'app.test') {
     if (url.pathname === '/' || url.pathname === '/index.html') return route.fulfill({ contentType: 'text/html', body: fs.readFileSync(REPO + 'index.html') });
     if (url.pathname === '/entregar.html') return route.fulfill({ contentType: 'text/html', body: fs.readFileSync(REPO + 'entregar.html') });
-    if (url.pathname === '/pasar-notas.js' || /^\/extension\/[\w.-]+$/.test(url.pathname)) {
+    if (url.pathname === '/pasar-notas.js' || /^\/extension\/(iconos\/)?[\w.-]+$/.test(url.pathname)) {
       const f = REPO + url.pathname.slice(1);
       if (!fs.existsSync(f)) return route.fulfill({ status: 404, body: '' });
-      return route.fulfill({ contentType: f.endsWith('.js') ? 'text/javascript' : f.endsWith('.json') ? 'application/json' : 'text/plain', body: fs.readFileSync(f) });
+      return route.fulfill({ contentType: f.endsWith('.js') ? 'text/javascript' : f.endsWith('.json') ? 'application/json' : f.endsWith('.png') ? 'image/png' : 'text/plain', body: fs.readFileSync(f) });
     }
     if (url.pathname === '/api/entrega') {
       const b = req.postDataJSON(); llamadasEntregas.push(b);
@@ -496,12 +496,14 @@ console.log('== Pasar notas: hoja de Moodle, extensión y copiar ==');
   const de = await descargaExt;
   const zipExt = await JSZip.loadAsync(fs.readFileSync(await de.path()));
   const enZip = Object.keys(zipExt.files).filter(f => !zipExt.files[f].dir).sort();
-  ok(de.suggestedFilename() === 'pasar-notas.zip' && enZip.join() === ['LEEME.txt', 'fondo.js', 'manifest.json', 'popup.html', 'popup.js', 'puente.js', 'rellenar.js'].map(f => 'pasar-notas/' + f).sort().join(), 'descarga la extensión completa en un ZIP');
+  ok(de.suggestedFilename() === 'pasar-notas.zip' && enZip.join() === ['LEEME.txt', 'fondo.js', 'manifest.json', 'popup.html', 'popup.js', 'puente.js', 'rellenar.js', 'iconos/icono-16.png', 'iconos/icono-32.png', 'iconos/icono-48.png', 'iconos/icono-128.png'].map(f => 'pasar-notas/' + f).sort().join(), 'descarga la extensión completa en un ZIP');
   const manifest = JSON.parse(await zipExt.file('pasar-notas/manifest.json').async('string'));
   ok(manifest.manifest_version === 3 && !manifest.host_permissions && manifest.permissions.join() === 'storage,activeTab,scripting,alarms', 'la extensión no pide acceso a todas las webs');
   ok(manifest.content_scripts[0].exclude_matches.some(m => m.includes('entregar')), 'el puente no se carga en la página pública de los alumnos');
   const enManifest = [manifest.background.service_worker, manifest.action.default_popup, ...manifest.content_scripts[0].js];
   ok(enManifest.every(f => enZip.includes('pasar-notas/' + f)), 'el ZIP lleva todos los archivos que pide el manifest');
+  const iconoZip = await zipExt.file('pasar-notas/iconos/icono-128.png').async('nodebuffer');
+  ok(iconoZip.equals(fs.readFileSync(REPO + 'extension/iconos/icono-128.png')) && Object.values(manifest.icons).every(f => enZip.includes('pasar-notas/' + f)), 'los iconos van en el ZIP sin estropearse (binarios) y el manifest los declara');
   await page.screenshot({ path: OUT + '14-pasar-notas.png', fullPage: true });
   ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
 }

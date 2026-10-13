@@ -3,6 +3,12 @@
   "name": "Pasar notas",
   "version": "1.0.0",
   "description": "Rellena las notas de tu cuaderno en la página de calificaciones que tengas abierta. Tú revisas y guardas.",
+  "icons": {
+    "16": "iconos/icono-16.png",
+    "32": "iconos/icono-32.png",
+    "48": "iconos/icono-48.png",
+    "128": "iconos/icono-128.png"
+  },
   "permissions": [
     "storage",
     "activeTab",
@@ -14,7 +20,11 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Pasar notas"
+    "default_title": "Pasar notas",
+    "default_icon": {
+      "16": "iconos/icono-16.png",
+      "32": "iconos/icono-32.png"
+    }
   },
   "content_scripts": [
     {
