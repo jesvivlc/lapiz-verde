@@ -506,6 +506,38 @@ console.log('== Pasar notas: hoja de Moodle, extensión y copiar ==');
   ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
 }
 
+console.log('== Exportar el cuaderno a Excel ==');
+{
+  db.notas = [
+    { alumno_id: 'a-1', tarea_id: 't-1', nota: 9.2, faltas: 1, origen: 'markmate', comentario_ia: 'Muy buen trabajo', mejoras_ia: 'uno', mensaje_motivador: 'Sigue', corregido_at: '2026-10-12T10:00:00Z' },
+    { alumno_id: 'a-2', tarea_id: 't-1', nota: 4.6, faltas: null, origen: 'manual' },
+  ];
+  const { page, errores } = await prepararPagina(browser, { conSesion: true });
+  await page.waitForSelector('#app:not(.hidden)');
+  await page.click('.tab-btn[data-tab="cuaderno"]');
+  await page.waitForSelector('.grupo-card');
+  await page.click('.grupo-card');
+  await page.waitForSelector('#btnExportarGrupo');
+  const [descarga] = await Promise.all([page.waitForEvent('download'), page.click('#btnExportarGrupo')]);
+  ok(/^Cuaderno 3\.º ESO A \d{4}-\d{2}-\d{2}\.xlsx$/.test(descarga.suggestedFilename()), 'descarga «Cuaderno <grupo> <fecha>.xlsx»: ' + descarga.suggestedFilename());
+  const bytes = [...fs.readFileSync(await descarga.path())];
+  const libro = await page.evaluate((b) => {
+    const wb = XLSX.read(new Uint8Array(b), { type: 'array' });
+    const filas = n => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: null });
+    return { hojas: wb.SheetNames, notas: filas('Notas'), comentarios: filas('Comentarios'), faltas: filas('Faltas') };
+  }, bytes);
+  ok(libro.hojas.join() === 'Notas,Faltas,Comentarios', 'hojas: Notas, Faltas y Comentarios');
+  const ana = libro.notas.find(f => f[1] === 'Ana');
+  ok(ana && ana[0] === 'López García' && ana[2] === 9.2 && ana.at(-1) === 9.2, 'Ana: su nota como número y su media');
+  ok(libro.comentarios.some(f => f.includes('Muy buen trabajo') && f.includes('Corrector (aprobada por ti)')), 'el comentario de la corrección, con su origen');
+
+  await page.click('text=← Volver');
+  const [todo] = await Promise.all([page.waitForEvent('download'), page.click('#btnExportarTodo')]);
+  const hojas = await page.evaluate((b) => XLSX.read(new Uint8Array(b), { type: 'array' }).SheetNames, [...fs.readFileSync(await todo.path())]);
+  ok(todo.suggestedFilename().startsWith('Cuaderno completo') && hojas.includes('3.º ESO A') && hojas.includes('Comentarios'), 'exportar todo: una hoja por grupo y los comentarios juntos');
+  ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
+}
+
 console.log('== ZIP descargado de Drive (Classroom) o de OneDrive (Teams) ==');
 {
   const { page, errores } = await prepararPagina(browser, { conSesion: true });

@@ -93,5 +93,29 @@ ok(tablaParaCopiar([notas[0]], { conComentario: true }).split('\t')[2] === 'Buen
 ok(comentarioHtml('a\nb') === '<p>a<br>b</p>', 'saltos de línea simples → <br>');
 ok(tablaParaCopiar([{ nombre: 'X', apellidos: '=HYPERLINK("http://x")', nota: 5, comentario: '+SUMA(A1)' }], { conComentario: true }) === `'=HYPERLINK("http://x"), X\t5\t'+SUMA(A1)`, 'al copiar, lo que parece fórmula se neutraliza');
 
+console.log('== Exportar el cuaderno a Excel ==');
+{
+  const { hojasCuaderno, nombreHoja } = globalThis.PasarNotas;
+  const alumnos = [{ id: 'a1', nombre: 'Ana', apellidos: 'López' }, { id: 'a2', nombre: 'Luis', apellidos: '' }];
+  const tareas = [{ id: 't1', titulo: 'Redacción', evaluacion: '1' }, { id: 't2', titulo: 'Examen', evaluacion: '1' }, { id: 't3', titulo: 'Mural', evaluacion: '2' }, { id: 't4', titulo: 'Extra', evaluacion: null }];
+  const notas = [
+    { alumno_id: 'a1', tarea_id: 't1', nota: 7.5, faltas: 2, comentario_ia: 'Bien', mejoras_ia: 'uno\ndos', mensaje_motivador: 'Sigue', origen: 'markmate', corregido_at: '2026-10-12T20:00:00Z' },
+    { alumno_id: 'a1', tarea_id: 't2', nota: '9', faltas: null, origen: 'manual' },
+    { alumno_id: 'a1', tarea_id: 't3', nota: 6, origen: 'manual', comentario_profesor: 'Muy creativo' },
+    { alumno_id: 'a2', tarea_id: 't4', nota: 4, origen: 'manual' },
+  ];
+  const h = hojasCuaderno({ alumnos, tareas, notas });
+  ok(h.notas[0].join('|') === 'Apellidos|Nombre|Redacción (1.ª evaluación)|Examen (1.ª evaluación)|Mural (2.ª evaluación)|Extra|Media 1.ª evaluación|Media 2.ª evaluación|Media', 'cabecera: tareas con su evaluación, medias por evaluación y total');
+  ok(JSON.stringify(h.notas[1]) === JSON.stringify(['López', 'Ana', 7.5, 9, 6, null, 8.25, 6, 7.5]), 'Ana: notas como números, medias con 2 decimales');
+  ok(JSON.stringify(h.notas[2]) === JSON.stringify(['', 'Luis', null, null, null, 4, null, null, 4]), 'Luis: celdas vacías donde no hay nota');
+  ok(h.comentarios.length === 5 && h.comentarios[1][5] === 'Bien' && h.comentarios[1][9] === 'Corrector (aprobada por ti)' && h.comentarios[1][10] === '2026-10-12', 'comentarios: una fila por nota, con origen y fecha');
+  ok(h.comentarios.some(f => f[8] === 'Muy creativo' && f[9] === 'A mano'), 'incluye el comentario del profe');
+  ok(h.faltas && h.faltas[1].at(-1) === 2 && h.faltas[2].at(-1) === 0, 'hoja de faltas con el total');
+  ok(hojasCuaderno({ alumnos, tareas, notas: [notas[1]] }).faltas === null, 'sin faltas, sin hoja de faltas');
+  const usados = new Set();
+  ok(nombreHoja('3.º ESO A/B: [mañana]', usados) === '3.º ESO A B mañana' && nombreHoja('3.º ESO A/B: [mañana]', usados) === '3.º ESO A B mañana (2)', 'nombres de hoja válidos y sin repetir');
+  ok(nombreHoja('x'.repeat(40), usados).length === 31, 'como mucho 31 caracteres');
+}
+
 console.log(fallos ? `\n${fallos} FALLOS` : '\nTodo correcto');
 process.exit(fallos ? 1 : 0);
