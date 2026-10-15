@@ -457,11 +457,20 @@ console.log('== Cuaderno ==');
 {
   const { page, errores } = await prepararPagina(browser, { conSesion: true });
   await page.waitForSelector('#app:not(.hidden)');
-  db.v_resumen_grupo = [{ grupo_id: 'g-1', grupo_nombre: '3.º ESO A', nivel: '3ESO', anio_academico: '2026-2027', total_alumnos: 4, total_tareas: 1, media_general: 7.9 }];
+  db.v_resumen_grupo = [{ grupo_id: 'g-1', grupo_nombre: '3.º ESO A', nivel: '3ESO', anio_academico: 2026, total_alumnos: 4, total_tareas: 1, media_general: 7.9 }];
   db.notas = [{ alumno_id: 'a-1', tarea_id: 't-1', nota: 9.2, faltas: null, origen: 'markmate' }];
   await page.click('.tab-btn[data-tab="cuaderno"]');
   await page.waitForSelector('.grupo-card');
   ok((await page.textContent('.grupo-card')).includes('3.º ESO'), 'lista el grupo con su curso');
+  ok((await page.textContent('.grupo-card')).includes('2026-2027'), 'el año guardado como número (2026) se ve como curso escolar');
+  // Nuevo grupo: en la base de datos el año académico es un entero
+  const altaGrupo = page.waitForRequest(r => r.url().includes('/rest/v1/grupos') && r.method() === 'POST');
+  await page.click('text=+ Nuevo grupo');
+  ok(/^\d{4}-\d{4}$/.test(await page.$eval('#ngAnio', s => s.selectedOptions[0].textContent)), 'propone el curso escolar como «aaaa-aaaa»');
+  await page.fill('#ngNombre', '1.º ESO E');
+  await page.click('#modalContenido >> text=Crear grupo');
+  const cuerpo = (await altaGrupo).postDataJSON();
+  ok(Number.isInteger(cuerpo.anio_academico) && cuerpo.anio_academico >= 2025, `guarda el año académico como número (${JSON.stringify(cuerpo.anio_academico)})`);
   await page.click('.grupo-card');
   await page.waitForSelector('.notas-table');
   ok(await page.$eval('.input-nota.origen-ia', el => el.value) === '9.2', 'la nota corregida aparece en el cuaderno, marcada');
