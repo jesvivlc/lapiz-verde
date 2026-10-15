@@ -2860,7 +2860,7 @@
     const nivel = CURSOS.find(([v]) => v === g.nivel)?.[1] || g.nivel || '';
     return `<div class="grupo-card" data-grupo-id="${esc(g.grupo_id)}" data-grupo-nombre="${esc(g.grupo_nombre)}">
       <div class="grupo-card-name">${esc(g.grupo_nombre)}</div>
-      <div class="grupo-card-nivel">${esc(nivel)}${g.anio_academico ? ' · ' + esc(g.anio_academico) : ''}</div>
+      <div class="grupo-card-nivel">${esc(nivel)}${g.anio_academico ? ' · ' + esc(cursoEscolar(g.anio_academico)) : ''}</div>
       <div class="grupo-stats">
         <div class="grupo-stat">
           <span class="grupo-stat-val">${g.total_alumnos ?? '—'}</span>
@@ -2878,10 +2878,14 @@
     </div>`;
   }
 
+  /* En la base de datos el año académico es el año en que empieza (2026); en pantalla, «2026-2027» */
   function anioAcademicoActual() {
     const d = new Date();
-    const y = d.getMonth() >= 7 ? d.getFullYear() : d.getFullYear() - 1;
-    return `${y}-${y + 1}`;
+    return d.getMonth() >= 7 ? d.getFullYear() : d.getFullYear() - 1;
+  }
+  function cursoEscolar(anio) {
+    const y = parseInt(anio, 10);
+    return Number.isFinite(y) && String(anio).trim() === String(y) ? `${y}-${y + 1}` : String(anio);
   }
 
   function modalNuevoGrupo() {
@@ -2898,7 +2902,7 @@
         </div>
         <div class="form-group">
           <label for="ngAnio">Año académico</label>
-          <input type="text" id="ngAnio" value="${anioAcademicoActual()}">
+          <select id="ngAnio">${[-1, 0, 1].map(k => anioAcademicoActual() + k).map(y => `<option value="${y}"${y === anioAcademicoActual() ? ' selected' : ''}>${y}-${y + 1}</option>`).join('')}</select>
         </div>
         <div class="modal-actions">
           <button type="button" class="btn btn-secondary btn-sm" onclick="cerrarModal()">Cancelar</button>
@@ -2913,7 +2917,7 @@
     const { error } = await sbClient.from('grupos').insert({
       nombre: document.getElementById('ngNombre').value.trim(),
       nivel: document.getElementById('ngNivel').value,
-      anio_academico: document.getElementById('ngAnio').value.trim(),
+      anio_academico: parseInt(document.getElementById('ngAnio').value, 10),
     });
     if (error) return showToast('No se pudo crear el grupo: ' + error.message, 'error');
     cerrarModal();

@@ -26,7 +26,7 @@ alter default privileges in schema public grant all on tables to anon, authentic
 alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
 alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
 
-create table grupos (id uuid primary key default gen_random_uuid(), nombre text, nivel text, anio_academico text, created_at timestamptz default now());
+create table grupos (id uuid primary key default gen_random_uuid(), nombre text, nivel text, anio_academico integer, created_at timestamptz default now());
 create table alumnos (id uuid primary key default gen_random_uuid(), grupo_id uuid references grupos(id), nombre text, apellidos text, email text, activo boolean default true, created_at timestamptz default now());
 create table tareas (id uuid primary key default gen_random_uuid(), grupo_id uuid references grupos(id), titulo text, descripcion text, evaluacion text, fecha_entrega date, peso_nota numeric, created_at timestamptz default now());
 create table notas (id uuid primary key default gen_random_uuid(), alumno_id uuid references alumnos(id), tarea_id uuid references tareas(id), nota numeric, faltas int, comentario_ia text, mejoras_ia text, mensaje_motivador text, comentario_profesor text, origen text check (origen in ('manual','markmate')), corregido_at timestamptz, created_at timestamptz default now(), unique (alumno_id, tarea_id));
