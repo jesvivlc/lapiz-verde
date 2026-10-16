@@ -212,5 +212,52 @@ console.log('== Anonimizar ==');
   ok(anonimizar('Autor: Miguel de Cervantes', 'Ana García') === 'Autor: Miguel de Cervantes', '«Autor:» en un trabajo de literatura no se toca');
 }
 
+console.log('== ZIP de Teams con varias tareas ==');
+{
+  const { filtrarPorTarea, tareasDeTeams, emparejarEntregas: emparejar } = globalThis.LeerTrabajos;
+  const zip = [
+    'Submitted files/Álvarez Pozo, Kevin/Preguntas _300_/Preguntas _300_.jpeg',
+    'Submitted files/Álvarez Pozo, Kevin/Preguntas _300_/Preguntas _300_ 1.jpeg',
+    'Submitted files/Álvarez Pozo, Kevin/Mapa de Europa/mapa.pdf',
+    'Submitted files/Carrasco Vila, Julia/Preguntas _300_/300Julia.pdf',
+    'Submitted files/Esteve Sanz, Álvaro/Preguntas _300_/Preguntas _300_.pdf',
+  ];
+  const f = filtrarPorTarea(zip, 'Preguntas "300"');
+  ok(f.rutas.length === 4 && !f.rutas.some(r => r.includes('Mapa')) && !f.otrasTareas.length,
+    'Teams cambia las comillas por «_»: «Preguntas "300"» encuentra la carpeta «Preguntas _300_»');
+  ok(filtrarPorTarea(zip, 'Preguntas 300').rutas.length === 4, 'también si en la app la tarea se llama «Preguntas 300»');
+  const nada = filtrarPorTarea(zip, 'Examen tema 2');
+  ok(nada.rutas.length === zip.length && nada.otrasTareas.sort().join('|') === 'Mapa de Europa|Preguntas _300_',
+    'ninguna carpeta se llama como la tarea: avisa de las que hay');
+  ok(!filtrarPorTarea(['Ana López/redaccion.pdf'], 'Redacción').otrasTareas.length && tareasDeTeams(['Ana/x.pdf']).length === 0, 'fuera de Teams no hay «otras tareas»');
+  ok(filtrarPorTarea(zip, '').rutas.length === zip.length, 'sin nombre de tarea, vale todo');
+  const temas = ['Submitted files/Ana Gil/Tema 1/a.pdf', 'Submitted files/Ana Gil/Tema 10/b.pdf', 'Submitted files/Ana Gil/Tema 11/c.pdf'];
+  ok(filtrarPorTarea(temas, 'Tema 1').rutas.join() === temas[0], '«Tema 1» no coge «Tema 10» ni «Tema 11»');
+  const solo10 = filtrarPorTarea(temas.slice(1), 'Tema 1');
+  ok(solo10.rutas.length === 2 && solo10.otrasTareas.length === 2, 'si solo hay «Tema 10» y «Tema 11», avisa en vez de mezclarlas');
+  ok(filtrarPorTarea(['Submitted files/Ana Gil/Redacción final/a.pdf', 'Submitted files/Ana Gil/Mapa/b.pdf'], 'Redacción').rutas.length === 1, 'una sola carpeta que contiene el nombre: vale');
+  const alumnos = [{ nombre: 'Kevin Álvarez Pozo' }, { nombre: 'Julia Carrasco Vila' }, { nombre: 'Álvaro Esteve Sanz' }, { nombre: 'Nico Campos Cid' }];
+  const r = emparejar(f.rutas, alumnos, { tarea: 'Preguntas "300"' });
+  ok(r.asignados[0]?.length === 2 && r.asignados[1]?.length === 1 && r.asignados[2]?.length === 1 && !r.porRevisar.length,
+    'cada archivo, a su alumno por la carpeta «Apellidos, Nombre»; las 2 fotos de Kevin juntas');
+  ok(r.sinEntrega.join() === '3', 'el alumno sin archivos, «sin entrega»');
+}
+
+console.log('== Columnas del Excel de alumnos ==');
+{
+  const { columnasAlumnos: col } = globalThis.LeerTrabajos;
+  const j = c => JSON.stringify(c);
+  ok(j(col(['Nombre', 'Apellidos', 'Email'])) === j({ nombre: 'Nombre', apellidos: 'Apellidos', email: 'Email', completo: null }), 'español, lo de siempre');
+  ok(j(col(['First Name', 'Last Name', 'Email Address', 'Preguntas "300"', 'Points'])) === j({ nombre: 'First Name', apellidos: 'Last Name', email: 'Email Address', completo: null }),
+    'Teams en inglés: First Name, Last Name, Email Address');
+  ok(j(col(['Nombre', 'Apellido', 'Dirección de correo electrónico', 'Puntos'])) === j({ nombre: 'Nombre', apellidos: 'Apellido', email: 'Dirección de correo electrónico', completo: null }),
+    'Teams en español');
+  ok(j(col(['Given name', 'Surname', 'E-mail'])) === j({ nombre: 'Given name', apellidos: 'Surname', email: 'E-mail', completo: null }), 'otras formas en inglés');
+  const c = col(['Nº', 'Alumno/a', 'Correo']);
+  ok(c.nombre === null && c.completo === 'Alumno/a' && c.email === 'Correo', 'una sola columna con el nombre completo');
+  ok(col(['Nombre de usuario', 'Nombre completo']).nombre === null && col(['Nombre de usuario', 'Nombre completo']).completo === 'Nombre completo', '«Nombre de usuario» no es el nombre');
+  ok(col(['Nom', 'Cognoms']).nombre === 'Nom' && col(['Nom', 'Cognoms']).apellidos === 'Cognoms', 'ITACA en valenciano');
+}
+
 console.log(fallos ? `\n${fallos} prueba(s) fallida(s)` : '\nTodas las pruebas de leer-trabajos pasan');
 process.exit(fallos ? 1 : 0);

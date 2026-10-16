@@ -284,6 +284,13 @@ console.log('== ZIP de Moodle/Aules + Excel, y quedarse sin créditos ==');
     const input = document.getElementById('excelFile'); input.files = dt.files; onExcelSelected(input);
   });
   await page.waitForFunction(() => document.getElementById('alumnosNum').textContent === '1');
+  const deTeams = await page.evaluate(async () => {
+    const ws = XLSX.utils.json_to_sheet([{ 'First Name': 'Ana', 'Last Name': 'López Gil', 'Email Address': 'ana@x.es', Points: 8 }]);
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'A');
+    return parseExcel(new File([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], 'teams.xlsx'));
+  });
+  ok(JSON.stringify(deTeams) === JSON.stringify([{ nombre: 'Ana', apellidos: 'López Gil', email: 'ana@x.es' }]), 'Excel de Teams en inglés: nombre, apellidos y correo');
+  ok(await page.$eval('#trabajosZone + .ayuda-bajar summary', e => e.textContent.includes('todas las entregas')), 'ayuda para bajar las entregas de Teams, Aules y Classroom');
   await page.fill('#nombreTarea', 'Redacción');
   await page.fill('#rubrica', '- x (10 pts)');
   await page.setInputFiles('#trabajosFile', OUT + 'moodle.zip');

@@ -151,6 +151,9 @@
     .dropzone-icon { font-size: 28px; margin-bottom: 6px; display: block; }
     .dropzone-label { font-weight: 600; color: var(--primary); font-size: 14px; }
     .dropzone-hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    .ayuda-bajar { margin-top: 8px; font-size: 13px; color: var(--text-muted); }
+    .ayuda-bajar summary { cursor: pointer; color: var(--primary-dark); font-weight: 600; }
+    .ayuda-bajar p { margin: 6px 0 0; line-height: 1.45; }
     .dropzone.file-loaded { border-color: var(--success); background: #ECFDF5; border-style: solid; }
     .dropzone.file-loaded .dropzone-label { color: #065F46; word-break: break-all; }
 
@@ -717,7 +720,7 @@
         <div class="paso">
           <div class="paso-num">2</div>
           <h4>Recoge los trabajos</h4>
-          <p>Como te venga mejor: <strong>un enlace o un QR</strong> para que cada alumno suba fotos desde el móvil, el <strong>ZIP</strong> de Aules, Teams o Classroom tal cual se descarga, o <strong>las libretas escaneadas</strong> de una vez.</p>
+          <p>Como te venga mejor: <strong>un enlace o un QR</strong> para que cada alumno suba fotos desde el móvil, el <strong>ZIP</strong> de Aules, Classroom o Teams (desde su carpeta de SharePoint) tal cual se descarga, o <strong>las libretas escaneadas</strong> de una vez.</p>
         </div>
         <div class="paso">
           <div class="paso-num">3</div>
@@ -905,6 +908,13 @@
           <div class="dropzone-label">Suelta aquí los trabajos, como los tengas</div>
           <div class="dropzone-hint">El ZIP de Aules, Moodle, Teams o Drive, la carpeta descomprimida o los archivos sueltos: PDF, fotos, Word, LibreOffice o PowerPoint. Las libretas escaneadas con pegatina QR, también aquí.</div>
         </div>
+        <details class="ayuda-bajar">
+          <summary>¿Cómo bajo todas las entregas de una vez?</summary>
+          <p><strong>Teams:</strong> en el equipo de la clase, pestaña «Archivos» → «Abrir en SharePoint» → biblioteca «Student Work» (si no la ves, en «Contenido del sitio») → «Submitted files». Marca todas las carpetas de alumnos y pulsa «Descargar»: baja un ZIP con una carpeta por alumno. Si trae varias tareas, la app coge la que se llama como la tuya. Desde la propia pestaña «Tareas» de Teams solo se puede bajar archivo a archivo.</p>
+          <p><strong>Aules o Moodle:</strong> en la tarea, «Ver todas las entregas» → «Descargar todas las entregas».</p>
+          <p><strong>Classroom:</strong> en la tarea, el icono de carpeta abre las entregas en Drive; selecciónalas todas y «Descargar».</p>
+          <p>Los alumnos sin archivo salen como «sin entrega» y no gastan correcciones.</p>
+        </details>
       </div>
       <div class="form-group" id="excelGroup">
         <label>Excel de alumnos (opcional)</label>
@@ -912,7 +922,7 @@
           <input type="file" id="excelFile" accept=".xlsx,.xls,.csv" onchange="onExcelSelected(this)">
           <span class="dropzone-icon">📊</span>
           <div class="dropzone-label">Arrastra el Excel aquí o haz clic</div>
-          <div class="dropzone-hint">Columnas: "nombre", "apellidos" y "email". Sin Excel, saco los nombres de los trabajos</div>
+          <div class="dropzone-hint">La lista de clase de Aules, ITACA, Classroom o Teams: busco las columnas de nombre, apellidos y correo, en español o en inglés. Sin Excel, saco los nombres de los trabajos</div>
         </div>
       </div>
 
@@ -1512,16 +1522,17 @@
           const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
           if (!rows.length) throw new Error('El Excel está vacío');
           const keys = Object.keys(rows[0]);
-          const k = s => norm(s);
-          const apellidosKey = keys.find(x => k(x).includes('apellido'));
-          const nombreKey = keys.find(x => k(x).includes('nombre') && x !== apellidosKey) || keys[0];
-          const emailKey  = keys.find(x => k(x).includes('email') || k(x).includes('correo') || k(x).includes('mail'));
+          const col = LeerTrabajos.columnasAlumnos(keys);
+          // Sin columna de nombre: la de nombre completo, o la primera
+          const completo = col.nombre ? null : (col.completo || keys[0]);
+          const texto = (r, c) => c ? String(r[c] ?? '').trim() : '';
           const result = rows
-            .map(r => ({
-              nombre: String(r[nombreKey] || '').trim(),
-              apellidos: apellidosKey ? String(r[apellidosKey] || '').trim() : '',
-              email: emailKey ? String(r[emailKey] || '').trim() : '',
-            }))
+            .map(r => {
+              const email = texto(r, col.email);
+              if (!completo) return { nombre: texto(r, col.nombre), apellidos: texto(r, col.apellidos), email };
+              const partido = col.apellidos ? { nombre: texto(r, completo), apellidos: texto(r, col.apellidos) } : LeerTrabajos.partirNombre(texto(r, completo));
+              return { nombre: partido.nombre || '', apellidos: partido.apellidos || '', email };
+            })
             .filter(a => a.nombre);
           if (!result.length) throw new Error('No se encontraron filas con nombre');
           resolve(result);
@@ -1547,16 +1558,6 @@
   function versionNum(path) {
     const m = path.match(/versi[oó]n[^\d]*(\d+)/i);
     return m ? parseInt(m[1]) : 0;
-  }
-
-  /* Teams y Drive meten la tarea en una carpeta y pueden traer varias tareas en el mismo ZIP;
-     Moodle/Aules no. Si alguna carpeta del ZIP se llama como la tarea, se exige; si no, vale todo.
-     Solo se miran las carpetas: un alumno que llama «redaccion.pdf» a su archivo no deja fuera al resto. */
-  function filtrarPorTarea(rutas, nombreTarea) {
-    if (!nombreTarea) return rutas;
-    const carpeta = r => norm(r.split('/').slice(0, -1).join('/'));
-    const conTarea = rutas.filter(r => carpeta(r).includes(norm(nombreTarea)));
-    return conTarea.length ? conTarea : rutas;
   }
 
   async function blobABase64(blob) {
@@ -2224,7 +2225,12 @@
     let fuente, rutas;
     try {
       fuente = await abrirTrabajos();
-      rutas = filtrarPorTarea([...fuente.keys()], datos.taskName);
+      const filtro = LeerTrabajos.filtrarPorTarea([...fuente.keys()], datos.taskName);
+      // ZIP de Teams con varias tareas y ninguna se llama como esta: corregirlas todas mezcladas sería un error caro
+      if (filtro.otrasTareas.length > 1) {
+        return showToast(`El ZIP trae ${filtro.otrasTareas.length} tareas (${filtro.otrasTareas.slice(0, 4).join(', ')}${filtro.otrasTareas.length > 4 ? '…' : ''}) y ninguna se llama «${datos.taskName}». Pon a la tarea el mismo nombre que en Teams.`, 'warning');
+      }
+      rutas = filtro.rutas;
     } catch (e) {
       return showToast('No se pudo abrir el ZIP: ' + e.message, 'error');
     }
