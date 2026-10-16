@@ -248,6 +248,61 @@
   }
 
   /* ══════════════════════════════════════
+     Elegir la tarea dentro de un ZIP con varias (Teams, Drive)
+  ══════════════════════════════════════ */
+
+  /* Solo letras y números: Teams cambia las comillas por «_» al crear la carpeta («Preguntas "300"» → «Preguntas _300_») */
+  const compacto = s => norm(s).replace(/[^a-z0-9ñç]+/g, '');
+
+  /** Tareas de un ZIP de Teams: la carpeta que hay dentro de la de cada alumno («Submitted files/López, Ana/[Tarea]/…») */
+  function tareasDeTeams(rutas) {
+    const tareas = new Set();
+    for (const r of rutas) {
+      const ts = String(r).split('/');
+      const k = ts.findIndex(t => /^submitted files$/i.test(t));
+      if (k >= 0 && k + 3 < ts.length) tareas.add(ts[k + 2]);
+    }
+    return [...tareas];
+  }
+
+  /**
+   * Teams y Drive meten la tarea en una carpeta y pueden traer varias tareas en el mismo ZIP; Moodle/Aules no.
+   * Si alguna carpeta se llama como la tarea, se exige; si no, vale todo. Solo se miran las carpetas: un alumno
+   * que llama «redaccion.pdf» a su archivo no deja fuera al resto. Devuelve { rutas, otrasTareas }: otrasTareas
+   * son las tareas de un ZIP de Teams que no encajan con el nombre (si hay más de una, no se sabe cuál corregir).
+   */
+  function filtrarPorTarea(rutas, nombreTarea) {
+    const buscada = compacto(nombreTarea);
+    if (!buscada) return { rutas, otrasTareas: [] };
+    const carpeta = r => compacto(String(r).split('/').slice(0, -1).join('/'));
+    const conTarea = rutas.filter(r => carpeta(r).includes(buscada));
+    if (conTarea.length) return { rutas: conTarea, otrasTareas: [] };
+    return { rutas, otrasTareas: tareasDeTeams(rutas) };
+  }
+
+  /* ══════════════════════════════════════
+     Columnas del Excel de alumnos
+  ══════════════════════════════════════ */
+
+  /**
+   * Qué columna es cada cosa en la lista de clase: Aules, ITACA, Classroom o Teams, en español o en inglés.
+   * Devuelve { nombre, apellidos, email, completo } con el nombre de la columna (o null). «completo» es una
+   * columna con nombre y apellidos juntos («Alumno», «Nombre completo», «Name»): se usa si no hay columna de nombre.
+   */
+  function columnasAlumnos(cabeceras) {
+    const ks = cabeceras.map(c => ({ c, k: ' ' + norm(c).replace(/[^a-z0-9ñç]+/g, ' ').trim() + ' ' }));
+    const buscar = (...pistas) => (ks.find(({ k }) => pistas.some(p => k.includes(` ${p} `))) || {}).c || null;
+    const email = buscar('email', 'e mail', 'correo', 'mail', 'email address');
+    const apellidos = buscar('apellidos', 'apellido', 'last name', 'surname', 'family name', 'cognoms', 'cognom');
+    const sinUsar = c => c !== email && c !== apellidos;
+    const nombre = ks.find(({ c, k }) => sinUsar(c) && !/ completo | complete | full | usuario | user | display /.test(k) &&
+      [' nombre ', ' nom ', ' first name ', ' given name ', ' first '].some(p => k.includes(p)))?.c || null;
+    const completo = ks.find(({ c, k }) => sinUsar(c) && c !== nombre &&
+      [' nombre completo ', ' full name ', ' display name ', ' name ', ' alumno ', ' alumna ', ' estudiante ', ' student ', ' alumne '].some(p => k.includes(p)))?.c || null;
+    return { nombre, apellidos, email, completo };
+  }
+
+  /* ══════════════════════════════════════
      Texto de documentos (XML dentro de un ZIP)
      El alumno controla el documento: nada de expresiones regulares que puedan atascarse.
      El XML se recorre una sola vez buscando «<» y «>» con indexOf.
@@ -435,6 +490,7 @@
 
   global.LeerTrabajos = {
     norm, palabras, tipoArchivo, emparejarEntregas, resolverEntregas, pareceNombre, partirNombre, nombresDeRutas,
+    filtrarPorTarea, tareasDeTeams, columnasAlumnos,
     textoDeDocx, textoDePptx, textoDeOdf, textoDeHtml, anonimizar, MARCA,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
