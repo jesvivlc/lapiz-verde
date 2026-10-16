@@ -231,6 +231,11 @@ console.log('== ZIP de Teams con varias tareas ==');
     'ninguna carpeta se llama como la tarea: avisa de las que hay');
   ok(!filtrarPorTarea(['Ana López/redaccion.pdf'], 'Redacción').otrasTareas.length && tareasDeTeams(['Ana/x.pdf']).length === 0, 'fuera de Teams no hay «otras tareas»');
   ok(filtrarPorTarea(zip, '').rutas.length === zip.length, 'sin nombre de tarea, vale todo');
+  const temas = ['Submitted files/Ana Gil/Tema 1/a.pdf', 'Submitted files/Ana Gil/Tema 10/b.pdf', 'Submitted files/Ana Gil/Tema 11/c.pdf'];
+  ok(filtrarPorTarea(temas, 'Tema 1').rutas.join() === temas[0], '«Tema 1» no coge «Tema 10» ni «Tema 11»');
+  const solo10 = filtrarPorTarea(temas.slice(1), 'Tema 1');
+  ok(solo10.rutas.length === 2 && solo10.otrasTareas.length === 2, 'si solo hay «Tema 10» y «Tema 11», avisa en vez de mezclarlas');
+  ok(filtrarPorTarea(['Submitted files/Ana Gil/Redacción final/a.pdf', 'Submitted files/Ana Gil/Mapa/b.pdf'], 'Redacción').rutas.length === 1, 'una sola carpeta que contiene el nombre: vale');
   const alumnos = [{ nombre: 'Kevin Álvarez Pozo' }, { nombre: 'Julia Carrasco Vila' }, { nombre: 'Álvaro Esteve Sanz' }, { nombre: 'Nico Campos Cid' }];
   const r = emparejar(f.rutas, alumnos, { tarea: 'Preguntas "300"' });
   ok(r.asignados[0]?.length === 2 && r.asignados[1]?.length === 1 && r.asignados[2]?.length === 1 && !r.porRevisar.length,

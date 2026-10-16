@@ -274,8 +274,17 @@
   function filtrarPorTarea(rutas, nombreTarea) {
     const buscada = compacto(nombreTarea);
     if (!buscada) return { rutas, otrasTareas: [] };
-    const carpeta = r => compacto(String(r).split('/').slice(0, -1).join('/'));
-    const conTarea = rutas.filter(r => carpeta(r).includes(buscada));
+    const carpetas = r => String(r).split('/').slice(0, -1);
+    const todas = [...new Set(rutas.flatMap(carpetas))];
+    // Igual que la tarea; si no hay, una sola carpeta que la contenga («Tema 1» no coge «Tema 10» y «Tema 11» a la vez)
+    let elegidas = todas.filter(c => compacto(c) === buscada);
+    if (!elegidas.length) {
+      const parecidas = todas.filter(c => compacto(c).includes(buscada));
+      const distintas = new Set(parecidas.map(compacto));
+      if (distintas.size > 1) return { rutas, otrasTareas: [...new Set(parecidas)] };
+      elegidas = parecidas;
+    }
+    const conTarea = rutas.filter(r => carpetas(r).some(c => elegidas.includes(c)));
     if (conTarea.length) return { rutas: conTarea, otrasTareas: [] };
     return { rutas, otrasTareas: tareasDeTeams(rutas) };
   }
