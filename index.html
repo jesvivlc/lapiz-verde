@@ -641,6 +641,32 @@
     .sin-identificar-item small, .resumen-ayuda { color: var(--text-muted); font-size: 13px; }
     .resumen-emparejado { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
     .resumen-aviso { color: #92400E; font-size: 13px; }
+    .modal-card:has(.reparto-lista) { max-width: 780px; }
+    .reparto-opciones { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; font-size: 14px; }
+    .reparto-opciones label, .escaner label { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 14px; color: inherit; margin: 0; }
+    .reparto-opciones input[type=number] { width: 64px; padding: 6px; margin-left: 6px; }
+    .reparto-lista { display: flex; flex-direction: column; gap: 8px; max-height: 52vh; overflow-y: auto; }
+    .reparto-examen { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; padding: 8px; border: 1px solid var(--border); border-radius: 10px; }
+    .reparto-cab { position: relative; flex: 1 1 300px; max-width: 420px; cursor: crosshair; user-select: none; line-height: 0; touch-action: none; }
+    .reparto-sin-tapar { display: block; text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 13px; color: var(--text-muted); margin: 0; }
+    .reparto-cab img { width: 100%; border-radius: 6px; border: 1px solid var(--border); pointer-events: none; }
+    .reparto-tapa { position: absolute; background: rgba(15, 23, 42, .55); border: 1px dashed #fff; pointer-events: none; }
+    .reparto-lado { flex: 1 1 200px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .reparto-lado select { padding: 6px; width: 100%; }
+    .reparto-lado small { color: var(--text-muted); font-size: 13px; }
+    .reparto-pags { display: flex; gap: 4px; flex-wrap: wrap; }
+    .reparto-pags button { padding: 0; border: 1px solid var(--border); border-radius: 4px; background: none; cursor: pointer; width: 84px; line-height: 0; overflow: hidden; }
+    .reparto-pags button:hover { border-color: var(--primary); }
+    .reparto-pags img { width: 100%; }
+    .enlace { background: none; border: 0; padding: 0; font: inherit; color: var(--primary-dark); text-decoration: underline; cursor: pointer; }
+    .escaner { position: fixed; inset: 0; z-index: 2000; background: #000; color: #fff; display: flex; flex-direction: column; }
+    .escaner video { flex: 1; min-height: 0; width: 100%; object-fit: contain; }
+    .escaner.destello video { opacity: .35; }
+    .escaner-arriba, .escaner-abajo { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; font-size: 14px; flex-wrap: wrap; }
+    .escaner-arriba strong { font-size: 16px; }
+    .escaner-disparo { width: 62px; height: 62px; border-radius: 50%; border: 4px solid #fff; background: var(--primary); cursor: pointer; flex-shrink: 0; }
+    .escaner-abajo img { height: 54px; border-radius: 4px; border: 1px solid #fff; }
+    .escaner-abajo .hueco { width: 54px; }
     .enlace-caja { display: flex; gap: 8px; }
     .enlace-caja input { flex: 1; min-width: 0; font-size: 13px; }
     .qr-enlace { align-self: center; text-align: center; font-size: 12px; color: var(--text-muted); }
@@ -906,14 +932,21 @@
           <input type="file" id="trabajosFile" multiple accept=".zip,.pdf,image/*,.docx,.docm,.odt,.odp,.pptx,.html,.htm,.txt" onchange="onTrabajosSelected(this)">
           <span class="dropzone-icon">📥</span>
           <div class="dropzone-label">Suelta aquí los trabajos, como los tengas</div>
-          <div class="dropzone-hint">El ZIP de Aules, Moodle o Drive, la carpeta descomprimida o los archivos sueltos (también los de Teams): PDF, fotos, Word, LibreOffice o PowerPoint. Las libretas escaneadas con pegatina QR, también aquí.</div>
+          <div class="dropzone-hint">El ZIP de Aules, Moodle o Drive, la carpeta descomprimida o los archivos sueltos (también los de Teams): PDF, fotos, Word, LibreOffice o PowerPoint. Los exámenes o libretas en papel, escaneados de una vez, también aquí.</div>
         </div>
+        <button type="button" class="btn btn-secondary btn-sm hidden" id="btnEscaner" onclick="abrirEscaner()" style="margin-top:8px;">📷 Escanear con la cámara</button>
         <details class="ayuda-bajar">
           <summary>¿Cómo bajo todas las entregas de una vez?</summary>
           <p><strong>Teams:</strong> no deja bajar todas las entregas de una vez. Lo más cómodo es pegar en la tarea de Teams el <strong>enlace de entrega</strong> de Lápiz Verde (botón «🔗 Enlace para los alumnos», encima): cada alumno sube ahí su trabajo y te llega ya con su nombre. Si ya entregaron en Teams, baja los archivos desde «Tareas» y suéltalos todos aquí: la app te pregunta de quién es cada uno.</p>
           <p><strong>Aules o Moodle:</strong> en la tarea, «Ver todas las entregas» → «Descargar todas las entregas».</p>
           <p><strong>Classroom:</strong> en la tarea, el icono de carpeta abre las entregas en Drive; selecciónalas todas y «Descargar».</p>
           <p>Los alumnos sin archivo salen como «sin entrega» y no gastan correcciones.</p>
+        </details>
+        <details class="ayuda-bajar">
+          <summary>¿Y los exámenes en papel?</summary>
+          <p><strong>Con la fotocopiadora del centro:</strong> pon toda la pila en el alimentador, «escanear a PDF» (a doble cara si lo están) y suelta aquí ese PDF. Te pregunto cuántas caras tiene cada examen y te enseño la cabecera de cada uno para que compruebes de quién es. Si recoges los exámenes en el orden de la lista, no hay que tocar nada.</p>
+          <p><strong>Aún más rápido:</strong> en el cuaderno del grupo, «📝 Hojas de examen con QR» imprime una hoja por alumno con su código. Si es la primera hoja de cada examen, se reparten solos.</p>
+          <p><strong>Sin fotocopiadora:</strong> «📷 Escanear con la cámara», con el móvil fijo sobre la mesa (un flexo, una pila de libros). Vas pasando páginas y hace la foto sola cuando la página se queda quieta.</p>
         </details>
       </div>
       <div class="form-group" id="excelGroup">
@@ -1006,6 +1039,7 @@
               <input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="importarAlumnos(this)">
             </label>
             <button class="btn btn-secondary btn-sm" onclick="imprimirPegatinas()">🏷️ Pegatinas QR</button>
+            <button class="btn btn-secondary btn-sm" onclick="imprimirHojasExamen()">📝 Hojas de examen con QR</button>
             <button class="btn btn-secondary btn-sm hidden" id="btnBuzon" onclick="modalBuzon()">📧 Buzón del grupo</button>
             <button class="btn btn-secondary btn-sm" onclick="modalPasarNotas()">📤 Pasar notas</button>
             <button class="btn btn-secondary btn-sm" id="btnExportarGrupo" onclick="exportarCuaderno(grupoActual, this)">⬇️ Exportar (Excel)</button>
@@ -1021,6 +1055,21 @@
 </main>
 </div><!-- /app -->
 
+<div class="escaner hidden" id="escaner" role="dialog" aria-label="Escanear con la cámara">
+  <div class="escaner-arriba">
+    <strong id="escanerEstado">Coloca la primera página</strong>
+    <span id="escanerCuenta">0 páginas</span>
+    <label><input type="checkbox" id="escanerAuto" checked> Foto automática</label>
+    <button class="btn btn-secondary btn-sm" type="button" onclick="cerrarEscaner(false)">✕ Cancelar</button>
+  </div>
+  <video id="escanerVideo" playsinline muted autoplay></video>
+  <div class="escaner-abajo">
+    <button class="btn btn-secondary btn-sm" type="button" id="escanerBorrar" onclick="escanerBorrarUltima()" disabled>↩ Borrar la última</button>
+    <img id="escanerMini" class="hidden" alt="Última página escaneada">
+    <button class="escaner-disparo" type="button" onclick="escanerDisparar(true)" aria-label="Hacer la foto ahora"></button>
+    <button class="btn btn-primary btn-sm" type="button" id="escanerListo" onclick="cerrarEscaner(true)">Salir</button>
+  </div>
+</div>
 <div id="modal" class="modal hidden" onclick="if (event.target === this) cerrarModal()">
   <div class="modal-card" id="modalContenido"></div>
 </div>
@@ -1047,7 +1096,7 @@
   const MAX_LADO_IMAGEN = 1568;   // por encima, la IA no gana detalle y cuesta más
   const MAX_MB_ARCHIVO = 3.2;     // límite de Vercel: 4,5 MB por petición, ya en base64
   const MAX_PAGINAS = 10;         // archivos o páginas por alumno en una corrección
-  const PREFIJO_QR = 'LV1:';      // contenido de las pegatinas: LV1:<id del alumno>
+  const PREFIJO_QR = 'LV1:';      // contenido de las pegatinas y de las hojas de examen: LV1:<id del alumno>
   /* Buzón de correo del grupo: desactivado hasta tener un dominio neutro para alumnos y familias
      (la dirección no debe delatar el producto). Para activarlo: poner aquí ese dominio. */
   const DOMINIO_ENTREGAS = null;
@@ -1109,6 +1158,7 @@
     rellenarSelectsCurso();
     setupDropzone('excelZone', 'excelFile', /\.(xlsx|xls|csv)$/i,   onExcelSelected);
     setupZonaTrabajos();
+    if (navigator.mediaDevices?.getUserMedia) document.getElementById('btnEscaner').classList.remove('hidden');
     document.getElementById('formLogin').addEventListener('submit', enviarEnlace);
     document.getElementById('sinIdentificar').addEventListener('click', onClickSinIdentificar);
     document.getElementById('btnBuzon').classList.toggle('hidden', !DOMINIO_ENTREGAS);
@@ -1457,6 +1507,7 @@
 
   const MAX_ARCHIVOS_SOLTADOS = 3000;
   const MAX_MB_ESCANEO = 500;   // lo que se lee a la vez para buscar pegatinas QR
+  const MAX_PAGINAS_ESCANEO = 600;   // páginas de un escaneo: más no caben en la memoria del navegador
   async function archivosDeEntradas(entradas) {
     const salida = [];
     async function recorrer(entrada, base) {
@@ -2237,20 +2288,15 @@
     if (!rutas.length) return showToast('No hay ningún archivo', 'error');
 
     let emp = alumnos.length ? LeerTrabajos.emparejarEntregas(rutas, alumnos, { tarea: datos.taskName }) : null;
-    // Ningún nombre encaja y son PDF o fotos: ¿libretas escaneadas con pegatina QR?
+    // Ningún nombre encaja y son PDF o fotos: papel escaneado (con QR se reparte solo; sin QR, lo confirma el profe)
     const conNombre = emp && (Object.keys(emp.asignados).length || emp.porRevisar.some(p => p.motivo !== 'desconocido'));
     const soloPapel = rutas.every(r => ['pdf', 'imagen'].includes(LeerTrabajos.tipoArchivo(r)));
-    const hayPdf = rutas.some(r => LeerTrabajos.tipoArchivo(r) === 'pdf');
     if (!conNombre && soloPapel && alumnos.length && grupoId) {
-      if (rutas.some(r => fuente.get(r).mb() > MAX_MB_DESCOMPRIMIDO)) return showToast('Hay un archivo demasiado grande. Escanéalo en varias partes.', 'error');
+      if (rutas.some(r => !fuente.get(r).file && fuente.get(r).mb() > MAX_MB_DESCOMPRIMIDO)) return showToast('Hay un archivo demasiado grande. Escanéalo en varias partes.', 'error');
       if (rutas.reduce((t, r) => t + fuente.get(r).mb(), 0) > MAX_MB_ESCANEO) return showToast(`Entre todos los archivos pasan de ${MAX_MB_ESCANEO} MB. Corrige la clase en dos veces.`, 'error');
       const archivos = [];
       for (const r of rutas) archivos.push(fuente.get(r).file ?? new File([await fuente.get(r).uint8()], r.split('/').pop()));
-      if (await corregirEscaneo(archivos, datos)) return;
-      // Sin ninguna pegatina: un PDF sin nombre puede ser el escaneo de varias libretas; no se manda entero a nadie
-      if (hayPdf) {
-        return showToast('No he encontrado ninguna pegatina QR de este grupo. Si son libretas escaneadas, ¿es el grupo correcto? Si son trabajos sueltos, pon el nombre del alumno en cada archivo.', 'error');
-      }
+      return corregirEscaneo(archivos, datos);
     }
     if (!alumnos.length) {
       alumnos = await crearListaDesdeTrabajos(rutas, grupoId);
@@ -2547,7 +2593,7 @@
   }
 
   /* ══════════════════════════════════════
-     CANAL 3: escaneo de libretas con pegatinas QR
+     CANAL 3: papel escaneado (exámenes y libretas), con QR o sin él
      Todo se hace en el navegador: las páginas no salen del ordenador hasta corregirlas.
   ══════════════════════════════════════ */
 
@@ -2626,10 +2672,11 @@
     if (hayPdf) await prepararWorkerPdf();
     const ordenados = [...files].sort((a, b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
     const paginas = [];
-    for (const f of ordenados) {
+    for (const [archivo, f] of ordenados.entries()) {
       if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf') {
         // isEvalSupported: false → un PDF manipulado no puede ejecutar código (CVE-2024-4367)
         const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await f.arrayBuffer()), isEvalSupported: false }).promise;
+        if (paginas.length + pdf.numPages > MAX_PAGINAS_ESCANEO) { pdf.destroy(); throw new Error(`son más de ${MAX_PAGINAS_ESCANEO} páginas. Corrige la clase en dos veces.`); }
         for (let n = 1; n <= pdf.numPages; n++) {
           const pagina = await pdf.getPage(n);
           const base = pagina.getViewport({ scale: 1 });
@@ -2638,7 +2685,7 @@
           canvas.width = Math.round(viewport.width);
           canvas.height = Math.round(viewport.height);
           await pagina.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-          paginas.push(await procesarPagina(canvas));
+          paginas.push({ ...await procesarPagina(canvas), archivo });
           pagina.cleanup();
           avisar(paginas.length);
         }
@@ -2650,7 +2697,7 @@
         canvas.width = Math.round(bmp.width * escala);
         canvas.height = Math.round(bmp.height * escala);
         canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
-        paginas.push(await procesarPagina(canvas));
+        paginas.push({ ...await procesarPagina(canvas), archivo });
         avisar(paginas.length);
       }
     }
@@ -2710,44 +2757,268 @@
     return archivos;
   }
 
-  /* Libretas escaneadas con pegatina QR. Devuelve false si no hay ninguna pegatina del grupo
-     (entonces corregirClase sigue como con cualquier otro archivo: el profe dice de quién es cada uno). */
+  /* ── Papel sin QR: la pila se corta cada N caras y el profe confirma de quién es cada examen ──
+     Las cabeceras con el nombre solo se ven en esa pantalla: no salen del navegador. */
+
+  const ALTO_CABECERA = 0.28;   // parte de arriba de la página que se enseña para leer el nombre
+
+  /* De cada página: si está en blanco y un recorte pequeño de su cabecera.
+     El blanco se mira con detalle (a 900 px): reducida, una línea suelta de letra pequeña se pierde. */
+  async function prepararReparto(paginas, girado) {
+    const lienzo = (bmp, w) => {
+      const c = document.createElement('canvas');
+      c.width = w; c.height = Math.max(1, Math.round(bmp.height * w / bmp.width));
+      const ctx = c.getContext('2d', { willReadFrequently: true });
+      if (girado) { ctx.translate(c.width, c.height); ctx.rotate(Math.PI); }
+      ctx.drawImage(bmp, 0, 0, c.width, c.height);
+      return c;
+    };
+    for (const p of paginas) {
+      const bmp = await createImageBitmap(p.blob);
+      if (p.blanca === undefined) {
+        const c = lienzo(bmp, Math.min(900, bmp.width));
+        const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data, lum = new Uint8Array(c.width * c.height);
+        for (let i = 0; i < lum.length; i++) lum[i] = (d[4 * i] * 77 + d[4 * i + 1] * 150 + d[4 * i + 2] * 29) >> 8;
+        p.blanca = LeerTrabajos.paginaEnBlanco(lum, c.width, c.height);
+      }
+      const c = lienzo(bmp, 420);
+      bmp.close?.();
+      const cab = document.createElement('canvas');
+      cab.width = c.width; cab.height = Math.max(1, Math.round(c.height * ALTO_CABECERA));
+      cab.getContext('2d').drawImage(c, 0, 0);
+      p.cabecera = cab.toDataURL('image/jpeg', 0.75);
+    }
+    // Todo «en blanco» no es una pila con dorsos vacíos: no se descarta nada
+    if (paginas.every(p => p.blanca)) paginas.forEach(p => { p.blanca = false; });
+  }
+
+  /* La página tal como va a la IA: del derecho y, en la primera cara, con el nombre tapado */
+  async function transformarPagina(blob, { girar, tapa }) {
+    if (!girar && !tapa) return blob;
+    const bmp = await createImageBitmap(blob);
+    const c = document.createElement('canvas');
+    c.width = bmp.width; c.height = bmp.height;
+    const ctx = c.getContext('2d');
+    if (girar) { ctx.translate(c.width, c.height); ctx.rotate(Math.PI); }
+    ctx.drawImage(bmp, 0, 0);
+    bmp.close?.();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (tapa) {
+      const m = 0.012;   // margen: el escáner no coloca todas las hojas igual
+      ctx.fillStyle = '#fff';
+      ctx.fillRect((tapa.x - m) * c.width, (tapa.y - m) * c.height, (tapa.w + 2 * m) * c.width, (tapa.h + 2 * m) * c.height);
+    }
+    return new Promise(r => c.toBlob(r, 'image/jpeg', 0.8));
+  }
+
+  /* Devuelve { [id del alumno]: páginas } o null si el profe cancela */
+  function repartirEscaneo(paginas, alumnos) {
+    const numArchivos = new Set(paginas.map(p => p.archivo)).size;
+    // Varios archivos y alguno de varias páginas: cada archivo es un trabajo (PDF de alumnos sin nombre), no una pila
+    let porArchivo = numArchivos > 1 && numArchivos < paginas.length;
+    let girado = false, tapa = null, examenes = [], asignados = [];
+    const blancas = paginas.filter(p => p.blanca).length;
+    abrirModal(`
+      <h3>¿De quién es cada examen?</h3>
+      <p class="resumen-ayuda">No hay hojas con QR, así que lo reparto ${porArchivo ? 'por archivo' : 'en el orden de tu lista'}: comprueba el nombre en cada cabecera. Las cabeceras no salen de tu ordenador.</p>
+      <div class="reparto-opciones">
+        <label>Caras por examen<input type="number" id="repCaras" min="1" max="${MAX_PAGINAS}" inputmode="numeric" ${porArchivo ? 'placeholder="—"' : ''}></label>
+        <label${blancas ? '' : ' class="hidden"'}><input type="checkbox" id="repBlancas" checked> No contar ${blancas === 1 ? 'la cara en blanco' : `las ${blancas} caras en blanco`}</label>
+        <button class="btn btn-secondary btn-sm" type="button" id="repGirar">↻ Está del revés</button>
+      </div>
+      <div id="repResumen" class="resumen-emparejado"></div>
+      <div id="repLista" class="reparto-lista"></div>
+      <p class="resumen-ayuda" id="repTapaAyuda"></p>
+      <label class="reparto-sin-tapar" id="repSinTaparLabel"><input type="checkbox" id="repSinTapar"> Enviar sin tapar: en estos exámenes no se ve el nombre, o acepto que la IA lo vea</label>
+      <div class="modal-actions">
+        <button class="btn btn-secondary btn-sm" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn btn-primary btn-sm" id="btnConfirmarReparto">Corregir</button>
+      </div>`);
+    const el = id => document.getElementById(id);
+    const lista = el('repLista');
+    const ignorarBlancas = () => el('repBlancas').checked;
+
+    const pintarTapa = () => {
+      lista.querySelectorAll('.reparto-tapa').forEach(t => t.remove());
+      if (tapa) lista.querySelectorAll('.reparto-cab').forEach(cab => {
+        const t = document.createElement('div');
+        t.className = 'reparto-tapa';
+        Object.assign(t.style, { left: tapa.x * 100 + '%', top: tapa.y / ALTO_CABECERA * 100 + '%', width: tapa.w * 100 + '%', height: tapa.h / ALTO_CABECERA * 100 + '%' });
+        cab.appendChild(t);
+      });
+      el('repTapaAyuda').innerHTML = tapa
+        ? 'Lo marcado se tapa en la primera cara de cada examen antes de enviarlo a la IA: comprueba que cubre el nombre en todas las cabeceras. Las demás caras no se tapan. <button type="button" class="enlace" id="repQuitarTapa">Quitar</button>'
+        : '<strong>Tapa el nombre:</strong> arrastra sobre él en una cabecera (con el ratón o con el dedo) y se tapará en la primera cara de todos los exámenes antes de enviarlos a la IA.';
+      el('repSinTaparLabel').classList.toggle('hidden', !!tapa);
+      if (examenes.length) resumen();
+    };
+    const resumen = () => {
+      const con = asignados.filter(a => a !== null);
+      const repetidos = [...new Set(con.filter((a, i) => con.indexOf(a) !== i))].map(i => alumnos[i].nombre);
+      const largos = examenes.filter((ex, k) => asignados[k] !== null && ex.length > MAX_PAGINAS).length;
+      const saldo = perfil?.creditos;
+      el('repResumen').innerHTML =
+        `<div>✔ <strong>${examenes.length}</strong> ${examenes.length === 1 ? 'examen' : 'exámenes'} en el escaneo y ${alumnos.length} alumnos en la lista.` +
+          (alumnos.length - new Set(con).size > 0 ? ` ${alumnos.length - new Set(con).size} sin examen (no gastan correcciones).` : '') + '</div>' +
+        (repetidos.length ? `<div class="resumen-aviso">⚠️ Tienen más de un examen: ${repetidos.map(esc).join(', ')}. Cambia el alumno o une las páginas.</div>` : '') +
+        (largos ? `<div class="resumen-aviso">⚠️ Hay exámenes de más de ${MAX_PAGINAS} caras: pártelos pulsando en la página donde empieza el siguiente.</div>` : '') +
+        (typeof saldo === 'number' ? `<div class="resumen-ayuda">Gastarás ${con.length} ${con.length === 1 ? 'corrección' : 'correcciones'}; te quedan ${saldo}.` +
+          (saldo < con.length ? ' <strong>No llegan para todos: se corregirá hasta agotar el saldo.</strong>' : '') + '</div>' : '');
+      const btn = el('btnConfirmarReparto');
+      btn.textContent = `Corregir ${con.length}`;
+      btn.disabled = !con.length || repetidos.length > 0 || largos > 0 || !(tapa || el('repSinTapar').checked);
+    };
+    const pintar = () => {
+      lista.innerHTML = examenes.map((ex, k) => {
+        const opciones = '<option value="">No corregir</option>' + alumnos.map((a, i) =>
+          `<option value="${i}"${asignados[k] === i ? ' selected' : ''}>${esc(a.nombre)}</option>`).join('');
+        return `<div class="reparto-examen">
+          <div class="reparto-cab"><img src="${paginas[ex[0]].cabecera}" alt="Cabecera del examen ${k + 1}" draggable="false"></div>
+          <div class="reparto-lado">
+            <select data-examen="${k}" aria-label="De quién es el examen ${k + 1}">${opciones}</select>
+            <small>${ex.length} ${ex.length === 1 ? 'cara' : 'caras'}${k ? ` · <button type="button" class="enlace" data-corte="${ex[0]}">es del examen anterior</button>` : ''}</small>
+            ${ex.length > 1 ? `<div class="reparto-pags">${ex.slice(1).map(i =>
+              `<button type="button" data-corte="${i}" title="Aquí empieza otro examen"><img src="${paginas[i].cabecera}" alt="Otra cara: pulsa si aquí empieza otro examen" draggable="false"></button>`).join('')}</div>` : ''}
+          </div></div>`;
+      }).join('');
+      pintarTapa();
+      resumen();   // también con la pila vacía
+    };
+    const cortar = () => {
+      const caras = parseInt(el('repCaras').value, 10);
+      if (porArchivo && !caras) {
+        const grupos = new Map();
+        paginas.forEach((p, i) => { if (!(ignorarBlancas() && p.blanca)) grupos.set(p.archivo, [...(grupos.get(p.archivo) || []), i]); });
+        examenes = [...grupos.values()];
+        asignados = examenes.map(() => null);   // trabajos sueltos: el orden no dice de quién son
+      } else {
+        examenes = LeerTrabajos.cortarEscaneo(paginas, { caras: caras || 1, ignorarBlancas: ignorarBlancas() });
+        asignados = LeerTrabajos.asignarEnOrden(examenes.length, alumnos.length);
+      }
+      pintar();
+    };
+    if (!porArchivo) el('repCaras').value = LeerTrabajos.carasProbables(paginas.length - blancas, alumnos.length, MAX_PAGINAS);
+    cortar();
+
+    el('repCaras').addEventListener('input', cortar);
+    el('repBlancas').addEventListener('change', cortar);
+    el('repSinTapar').addEventListener('change', resumen);
+    el('repGirar').addEventListener('click', async e => {
+      e.target.disabled = true;
+      girado = !girado;
+      tapa = null;
+      await prepararReparto(paginas, girado);
+      e.target.disabled = false;
+      pintar();
+    });
+    lista.addEventListener('change', e => {
+      const k = e.target.dataset.examen;
+      if (k === undefined) return;
+      asignados = LeerTrabajos.reasignar(asignados, Number(k), e.target.value === '' ? null : Number(e.target.value), alumnos.length);
+      pintar();
+    });
+    lista.addEventListener('click', e => {
+      const corte = e.target.closest('[data-corte]');
+      if (!corte) return;
+      examenes = LeerTrabajos.moverCorte(examenes, Number(corte.dataset.corte));
+      asignados = porArchivo && !parseInt(el('repCaras').value, 10) ? examenes.map(() => null) : LeerTrabajos.asignarEnOrden(examenes.length, alumnos.length);
+      pintar();
+    });
+    el('repTapaAyuda').addEventListener('click', e => { if (e.target.id === 'repQuitarTapa') { tapa = null; pintarTapa(); } });
+    // Marcar el nombre arrastrando sobre una cabecera (con el dedo también: la lista se desplaza tocando fuera de la imagen)
+    let inicio = null;
+    const punto = (e, cab) => {
+      const r = cab.getBoundingClientRect();
+      return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) };
+    };
+    lista.addEventListener('pointerdown', e => {
+      const cab = e.target.closest('.reparto-cab');
+      if (!cab) return;
+      inicio = { cab, ...punto(e, cab) };
+      e.preventDefault();
+    });
+    lista.addEventListener('pointermove', e => {
+      if (!inicio) return;
+      const p = punto(e, inicio.cab);
+      const w = Math.abs(p.x - inicio.x), h = Math.abs(p.y - inicio.y);
+      if (w < 0.03 || h < 0.03) return;
+      tapa = { x: Math.min(p.x, inicio.x), y: Math.min(p.y, inicio.y) * ALTO_CABECERA, w, h: h * ALTO_CABECERA };
+      pintarTapa();
+    });
+    const soltar = () => { inicio = null; };
+    lista.addEventListener('pointerup', soltar);
+    lista.addEventListener('pointercancel', soltar);
+    lista.addEventListener('pointerleave', soltar);
+
+    return new Promise(resolve => {
+      alResolverResumen = resolve;
+      el('btnConfirmarReparto').addEventListener('click', async () => {
+        const btn = el('btnConfirmarReparto');
+        btn.disabled = true;
+        btn.textContent = 'Preparando…';
+        const porAlumno = {};
+        try {
+          for (const [k, ex] of examenes.entries()) {
+            if (asignados[k] === null) continue;
+            const suyas = [];
+            for (const [n, i] of ex.entries()) suyas.push({ blob: await transformarPagina(paginas[i].blob, { girar: girado, tapa: n === 0 ? tapa : null }) });
+            porAlumno[alumnos[asignados[k]].id] = suyas;
+          }
+        } catch (e) {
+          btn.disabled = false;
+          return showToast('No se pudieron preparar las páginas: ' + e.message, 'error');
+        }
+        alResolverResumen = null;
+        cerrarModal();
+        resolve(porAlumno);
+      });
+    });
+  }
+
+  /* Papel escaneado (exámenes, libretas) sin nombre en los archivos: con hojas o pegatinas QR se reparte solo;
+     si no hay ninguna del grupo, el profe confirma de quién es cada examen. */
   async function corregirEscaneo(archivosEscaneo, datos) {
     isProcessing = true;
     const btn = document.getElementById('btnCorregir');
     btn.disabled = true;
-    btn.innerHTML = '<div class="btn-spinner"></div> Leyendo pegatinas…';
+    btn.innerHTML = '<div class="btn-spinner"></div> Leyendo páginas…';
     document.getElementById('progressSection').classList.remove('hidden');
-    let paginas;
+    const alumnos = alumnosGrupoSel;
+    let paginas, porAlumno, sinPegatina, conQR;
     try {
-      paginas = await leerPaginasEscaneo(archivosEscaneo, n => updateProgress(`Leyendo página ${n} y su pegatina…`, 0, 0));
+      paginas = await leerPaginasEscaneo(archivosEscaneo, n => updateProgress(`Leyendo página ${n}…`, 0, 0));
+      ({ porAlumno, sinPegatina } = agruparPorQR(paginas, alumnos));
+      conQR = alumnos.some(a => porAlumno[a.id]);
+      if (!conQR) {
+        updateProgress('Preparando las cabeceras…', 0, 0);
+        await prepararReparto(paginas, false);
+      }
     } catch (e) {
-      showToast('No se pudo leer el escaneo: ' + e.message, 'error');
-      return true;
+      document.getElementById('progressSection').classList.add('hidden');
+      return showToast('No se pudo leer el escaneo: ' + e.message, 'error');
     } finally {
       isProcessing = false;
       btn.disabled = false;
       btn.innerHTML = '🚀 Corregir clase';
     }
 
-    const { porAlumno, sinPegatina } = agruparPorQR(paginas, alumnosGrupoSel);
-    const encontrados = alumnosGrupoSel.filter(a => porAlumno[a.id]);
-    if (!encontrados.length) {
+    if (!conQR) {
       updateProgress('', 0, 0);
       document.getElementById('progressSection').classList.add('hidden');
-      return false;
-    }
-    if (!confirmarCreditos(encontrados.length)) return true;
+      porAlumno = await repartirEscaneo(paginas, alumnos);
+      if (!porAlumno) return;
+      sinPegatina = 0;
+    } else if (!confirmarCreditos(alumnos.filter(a => porAlumno[a.id]).length)) return;
     guardarRubricaEnTarea(datos.rubrica);
-    if (sinPegatina) showToast(`${sinPegatina} ${sinPegatina === 1 ? 'página no tenía' : 'páginas no tenían'} pegatina delante y no se han corregido.`, 'warning');
+    if (sinPegatina) showToast(`${sinPegatina} ${sinPegatina === 1 ? 'página no tenía' : 'páginas no tenían'} un QR delante y no se han corregido.`, 'warning');
 
-    await ejecutarCorreccion(alumnosGrupoSel.map(alumno => {
+    await ejecutarCorreccion(alumnos.map(alumno => {
       const suyas = porAlumno[alumno.id];
-      if (!suyas) return { alumno, result: null, estado: 'sin-entrega', mensaje: 'No hay ninguna página con su pegatina en el escaneo.' };
+      if (!suyas) return { alumno, result: null, estado: 'sin-entrega', mensaje: 'No hay ninguna página suya en el escaneo.' };
       return {
         alumno, result: null, estado: 'pendiente',
         corregir: async () => {
-          if (suyas.length > MAX_PAGINAS) throw errorTarjeta('Demasiadas páginas', `Tiene ${suyas.length} páginas y el máximo es ${MAX_PAGINAS}. ¿Falta la pegatina del siguiente alumno?`);
+          if (suyas.length > MAX_PAGINAS) throw errorTarjeta('Demasiadas páginas', `Tiene ${suyas.length} páginas y el máximo es ${MAX_PAGINAS}. ¿Falta el QR del siguiente alumno?`);
           const archivos = await paginasParaEnviar(suyas);
           return api('corregir', { archivos, curso: datos.curso, nombre_tarea: datos.taskName, rubrica: datos.rubrica });
         },
@@ -2755,16 +3026,209 @@
     }));
   }
 
+  /* ── Escáner con la cámara: el móvil fijo, se pasan las páginas y dispara solo cuando la página está quieta ── */
+
+  const MAX_PAGINAS_ESCANER = 400;
+  const escaner = { stream: null, paginas: [], reloj: null, previo: null, detector: null, audio: null, ocupado: false, bloqueo: null, lienzo: null };
+
+  function lumDeFuente(fuente, w, h) {
+    const c = escaner.lienzo ??= document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(fuente, 0, 0, w, h);
+    const d = ctx.getImageData(0, 0, w, h).data, lum = new Uint8Array(w * h);
+    for (let i = 0; i < lum.length; i++) lum[i] = (d[4 * i] * 77 + d[4 * i + 1] * 150 + d[4 * i + 2] * 29) >> 8;
+    return lum;
+  }
+
+  function pintarEscaner(estado) {
+    const n = escaner.paginas.length;
+    if (estado) document.getElementById('escanerEstado').textContent = estado;
+    document.getElementById('escanerCuenta').textContent = `${n} ${n === 1 ? 'página' : 'páginas'}`;
+    document.getElementById('escanerBorrar').disabled = !n;
+    document.getElementById('escanerListo').textContent = n ? `Listo (${n})` : 'Salir';
+    const mini = document.getElementById('escanerMini');
+    if (mini.src.startsWith('blob:')) URL.revokeObjectURL(mini.src);
+    mini.classList.toggle('hidden', !n);
+    if (n) mini.src = URL.createObjectURL(escaner.paginas[n - 1]);
+    else mini.removeAttribute('src');
+  }
+
+  async function abrirEscaner() {
+    if (escaner.stream) return;
+    if (!navigator.mediaDevices?.getUserMedia) return showToast('Este navegador no deja usar la cámara desde la web. Haz las fotos con la cámara del móvil y súbelas.', 'error');
+    // El sonido hay que activarlo dentro del toque del profe (iOS)
+    try { escaner.audio ??= new (window.AudioContext || window.webkitAudioContext)(); escaner.audio.resume?.(); } catch (_) { escaner.audio = null; }
+    try {
+      escaner.stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 2560 }, height: { ideal: 1440 } } });
+    } catch (e) {
+      return showToast(e.name === 'NotAllowedError' ? 'No hay permiso para usar la cámara. Actívalo en el navegador y vuelve a pulsar.' : 'No se pudo abrir la cámara: ' + e.message, 'error');
+    }
+    try {
+      const video = document.getElementById('escanerVideo');
+      video.srcObject = escaner.stream;
+      await video.play().catch(() => {});
+      Object.assign(escaner, { paginas: [], previo: null, ocupado: false, detector: LeerTrabajos.detectorQuietud() });
+      document.getElementById('escaner').classList.remove('hidden');
+      pintarEscaner('Coloca la primera página');
+      navigator.wakeLock?.request('screen').then(b => { escaner.bloqueo = b; }).catch(() => {});
+      escaner.reloj = setInterval(escanerPaso, 120);
+    } catch (e) {
+      escaner.paginas = [];
+      cerrarEscaner(false);   // que la cámara no se quede encendida
+      showToast('No se pudo abrir la cámara: ' + e.message, 'error');
+    }
+  }
+  // Al salir de la página con el escáner abierto, la cámara se apaga
+  addEventListener('pagehide', () => escaner.stream?.getTracks().forEach(t => t.stop()));
+
+  function escanerPaso() {
+    const video = document.getElementById('escanerVideo');
+    if (escaner.ocupado || video.readyState < 2 || !video.videoWidth) return;
+    const lum = lumDeFuente(video, 64, 48);
+    const dif = LeerTrabajos.diferenciaMedia(escaner.previo, lum);
+    escaner.previo = lum;
+    if (!document.getElementById('escanerAuto').checked) return pintarEscaner('Pulsa el botón redondo en cada página');
+    if (escaner.detector.paso(dif)) return escanerDisparar(false);
+    pintarEscaner(!escaner.detector.armado ? '✔ Hecha. Pasa a la siguiente' : dif > 4 ? 'Pasando página…' : 'Quieta…');
+  }
+
+  function pitido() {
+    try {
+      const a = escaner.audio;
+      if (!a) return;
+      const o = a.createOscillator(), g = a.createGain();
+      o.frequency.value = 880;
+      g.gain.value = 0.15;
+      o.connect(g).connect(a.destination);
+      o.start();
+      o.stop(a.currentTime + 0.09);
+    } catch (_) {}
+    navigator.vibrate?.(40);
+  }
+
+  async function escanerDisparar(aMano) {
+    const video = document.getElementById('escanerVideo');
+    if (escaner.ocupado || !escaner.stream || !video.videoWidth) return;
+    if (escaner.paginas.length >= MAX_PAGINAS_ESCANER) return pintarEscaner(`Máximo de ${MAX_PAGINAS_ESCANER} páginas: pulsa «Listo» y corrige en dos veces`);
+    escaner.ocupado = true;
+    try {
+      // De tres fotogramas seguidos, el mejor enfocado
+      const escala = Math.min(1, LADO_LECTURA_QR / Math.max(video.videoWidth, video.videoHeight));
+      let mejor = null;
+      for (let k = 0; k < 3; k++) {
+        const c = document.createElement('canvas');
+        c.width = Math.round(video.videoWidth * escala);
+        c.height = Math.round(video.videoHeight * escala);
+        c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+        const n = LeerTrabajos.nitidez(lumDeFuente(c, 160, 120), 160, 120);
+        if (!mejor || n > mejor.n) mejor = { c, n };
+        if (k < 2) await new Promise(r => setTimeout(r, 70));
+      }
+      const blob = await new Promise(r => mejor.c.toBlob(r, 'image/jpeg', 0.85));
+      if (!blob || !escaner.stream) return;
+      escaner.paginas.push(blob);
+      if (aMano) escaner.detector.desarmar();
+      pitido();
+      const caja = document.getElementById('escaner');
+      caja.classList.add('destello');
+      setTimeout(() => caja.classList.remove('destello'), 120);
+      pintarEscaner('✔ Hecha. Pasa a la siguiente');
+    } finally {
+      escaner.ocupado = false;
+    }
+  }
+
+  function escanerBorrarUltima() {
+    escaner.paginas.pop();
+    pintarEscaner('Borrada. Vuelve a colocar esa página');
+  }
+
+  function cerrarEscaner(usar) {
+    const paginas = escaner.paginas;
+    if (!usar && paginas.length && !confirm(`¿Descartar las ${paginas.length} páginas escaneadas?`)) return;
+    clearInterval(escaner.reloj);
+    escaner.stream?.getTracks().forEach(t => t.stop());
+    escaner.bloqueo?.release?.().catch(() => {});
+    Object.assign(escaner, { stream: null, reloj: null, bloqueo: null, paginas: [], previo: null });
+    document.getElementById('escanerVideo').srcObject = null;
+    document.getElementById('escaner').classList.add('hidden');
+    if (!usar || !paginas.length) return;
+    ponerTrabajos(paginas.map((b, i) => {
+      const file = new File([b], `escaner-${String(i + 1).padStart(3, '0')}.jpg`, { type: 'image/jpeg' });
+      return { ruta: file.name, file };
+    }));
+    showToast(`${paginas.length} ${paginas.length === 1 ? 'página lista' : 'páginas listas'}. Elige grupo y tarea y pulsa «Corregir clase».`, 'success');
+  }
+
+  /* Los alumnos del grupo abierto en el cuaderno, para imprimir sus QR en `ventana` (se cierra si no hay) */
+  async function alumnosParaQR(ventana) {
+    const { data: alumnos, error } = await sbClient.from('alumnos').select('id,nombre,apellidos')
+      .eq('grupo_id', grupoActual.id).eq('activo', true).order('apellidos').order('nombre');
+    if (error) throw error;
+    if (!alumnos?.length) { ventana.close(); showToast('Este grupo no tiene alumnos', 'warning'); return null; }
+    await cargarLibreria('qrcode');
+    return alumnos;
+  }
+
+  /* Una hoja de examen por alumno con su QR ya impreso: al escanear la pila, cada examen va solo a su alumno.
+     La cabecera es como la pegatina (QR y, a su derecha, el nombre) para que se tape igual antes de ir a la IA. */
+  async function imprimirHojasExamen() {
+    if (!grupoActual) return;
+    const ventana = window.open('', '_blank');   // antes de esperar, o el navegador la bloquea
+    if (!ventana) return showToast('Permite las ventanas emergentes para imprimir las hojas', 'warning');
+    try {
+      const alumnos = await alumnosParaQR(ventana);
+      if (!alumnos) return;
+      const lineas = '<div class="linea"></div>'.repeat(27);
+      const hojas = alumnos.map(a => `<section class="hoja">
+        <header><div class="quien">${svgQR(PREFIJO_QR + a.id)}
+          <div class="nombre">${esc([a.nombre, a.apellidos].filter(Boolean).join(' '))}</div></div>
+          <div class="examen"><div class="titulo"></div><small>${esc(grupoActual.nombre)}</small></div></header>
+        <div class="pauta">${lineas}</div></section>`).join('');
+      ventana.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+        <title>Hojas de examen · ${esc(grupoActual.nombre)}</title>
+        <style>
+          @page { size: A4; margin: 12mm; }
+          body { margin: 0; font-family: system-ui, sans-serif; color: #0F172A; }
+          .aviso { padding: 16px; font-size: 14px; line-height: 1.5; background: #F0FDF4; }
+          .aviso button, .aviso input[type=text] { font: inherit; padding: 6px 10px; }
+          .aviso label { display: inline-block; margin: 8px 14px 0 0; }
+          @media print { .aviso { display: none; } }
+          .hoja { break-after: page; padding: 0 2mm; }
+          @media screen { .hoja { width: 186mm; margin: 12px auto; padding: 12mm; border: 1px solid #CBD5E1; } }
+          header { display: flex; align-items: center; gap: 6mm; padding-bottom: 4mm; border-bottom: 0.3mm solid #0F172A; }
+          .quien { display: flex; align-items: center; gap: 3mm; width: 60mm; flex-shrink: 0; overflow: hidden; }
+          .quien svg { width: 28mm; height: 28mm; flex-shrink: 0; }
+          .nombre { font-size: 10pt; font-weight: 600; line-height: 1.2; max-height: 24mm; overflow: hidden; overflow-wrap: anywhere; }
+          .examen { min-width: 0; }
+          .titulo { font-size: 14pt; font-weight: 700; overflow-wrap: anywhere; }
+          .examen small { font-size: 9pt; color: #64748B; }
+          .linea { height: 8.4mm; border-bottom: 0.2mm solid #94A3B8; }
+          .sin-pauta .pauta { display: none; }
+        </style></head><body>
+        <div class="aviso"><strong>Hojas de examen de ${esc(grupoActual.nombre)}</strong><br>
+          Una hoja por alumno, con su código. Repártelas con el examen: cada alumno escribe en la suya (o grápala encima de su examen). Que no escriban su nombre en ninguna otra parte: el de la cabecera se tapa antes de enviarlo a la IA.
+          Al recoger, la hoja con el código tiene que ser la primera de cada examen. Luego pasa toda la pila por la fotocopiadora
+          y suelta el PDF en «Trabajos»: cada examen va solo a su alumno, en el orden que sea.<br>
+          <label>Título <input type="text" maxlength="80" placeholder="Examen del tema 3" oninput="document.querySelectorAll('.titulo').forEach(t => t.textContent = this.value)"></label>
+          <label><input type="checkbox" checked onchange="document.body.classList.toggle('sin-pauta', !this.checked)"> Con líneas para escribir</label>
+          <button onclick="print()">🖨️ Imprimir</button></div>
+        ${hojas}</body></html>`);
+      ventana.document.close();
+    } catch (e) {
+      ventana.close();
+      showToast('No se pudieron preparar las hojas: ' + e.message, 'error');
+    }
+  }
+
   async function imprimirPegatinas() {
     if (!grupoActual) return;
     const ventana = window.open('', '_blank');   // antes de esperar, o el navegador la bloquea
     if (!ventana) return showToast('Permite las ventanas emergentes para imprimir las pegatinas', 'warning');
     try {
-      const { data: alumnos, error } = await sbClient.from('alumnos').select('id,nombre,apellidos')
-        .eq('grupo_id', grupoActual.id).eq('activo', true).order('apellidos').order('nombre');
-      if (error) throw error;
-      if (!alumnos?.length) { ventana.close(); return showToast('Este grupo no tiene alumnos', 'warning'); }
-      await cargarLibreria('qrcode');
+      const alumnos = await alumnosParaQR(ventana);
+      if (!alumnos) return;
       const pegatinas = alumnos.map(a => `<div class="pegatina">${svgQR(PREFIJO_QR + a.id)}
         <div class="nombre">${esc([a.nombre, a.apellidos].filter(Boolean).join(' '))}<small>${esc(grupoActual.nombre)}</small></div></div>`).join('');
       ventana.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">

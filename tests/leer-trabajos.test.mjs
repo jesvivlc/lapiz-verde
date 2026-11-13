@@ -259,5 +259,54 @@ console.log('== Columnas del Excel de alumnos ==');
   ok(col(['Nom', 'Cognoms']).nombre === 'Nom' && col(['Nom', 'Cognoms']).apellidos === 'Cognoms', 'ITACA en valenciano');
 }
 
+console.log('== Exámenes en papel: cortar la pila ==');
+{
+  const { paginaEnBlanco, cortarEscaneo, carasProbables, moverCorte, asignarEnOrden } = globalThis.LeerTrabajos;
+  const hoja = (w, h, pintar) => { const l = new Uint8Array(w * h).fill(235); pintar?.(l); return l; };
+  const W = 200, H = 280;
+  ok(paginaEnBlanco(hoja(W, H), W, H), 'papel liso: en blanco');
+  ok(paginaEnBlanco(hoja(W, H, l => { for (let i = 0; i < l.length; i += 3) l[i] = 215; }), W, H), 'lo que se transparenta de la otra cara (gris claro): en blanco');
+  ok(paginaEnBlanco(hoja(W, H, l => { for (let y = 0; y < H; y++) for (let x = 0; x < 8; x++) l[y * W + x] = 20; }), W, H), 'sombra negra en el borde del escáner: en blanco');
+  ok(!paginaEnBlanco(hoja(W, H, l => { for (let x = 40; x < 120; x += 2) l[100 * W + x] = 40; l.fill(40, 101 * W + 40, 101 * W + 60); }), W, H), 'una sola línea escrita: no está en blanco');
+  ok(!paginaEnBlanco(hoja(W, H, l => { for (let y = 30; y < 250; y += 6) for (let x = 20; x < 180; x += 2) l[y * W + x] = 60; }), W, H), 'página escrita: no está en blanco');
+
+  const pila = [0, 0, 0, 1, 0, 0, 0, 1, 0, 0].map(b => ({ blanca: !!b }));   // 3 caras + dorso en blanco, dos veces, y un examen al que le falta una hoja
+  ok(JSON.stringify(cortarEscaneo(pila, { caras: 3 })) === '[[0,1,2],[4,5,6],[8,9]]', 'cada 3 caras, sin contar los dorsos en blanco; el último, corto');
+  ok(JSON.stringify(cortarEscaneo(pila, { caras: 4, ignorarBlancas: false })) === '[[0,1,2,3],[4,5,6,7],[8,9]]', 'contando las caras en blanco');
+  ok(cortarEscaneo(pila, { caras: 0 }).length === 8 && cortarEscaneo([], { caras: 2 }).length === 0, 'caras no válidas → de una en una; pila vacía → nada');
+  ok(carasProbables(120, 30) === 4 && carasProbables(58, 30) === 2 && carasProbables(20, 30) === 1 && carasProbables(500, 30) === 10 && carasProbables(5, 0) === 1, 'caras por examen más probables');
+
+  const ex = [[0, 1, 2], [3, 4, 5]];
+  ok(JSON.stringify(moverCorte(ex, 1)) === '[[0],[1,2],[3,4,5]]', 'partir un examen por una página');
+  ok(JSON.stringify(moverCorte(ex, 3)) === '[[0,1,2,3,4,5]]', 'unir un examen al anterior');
+  ok(moverCorte(ex, 0) === ex && moverCorte(ex, 99) === ex, 'el primero no se une a nada; una página que no existe, tampoco');
+
+  const { reasignar } = globalThis.LeerTrabajos;
+  ok(asignarEnOrden(3, 4).join() === '0,1,2', 'la pila en el orden de la lista');
+  ok(JSON.stringify(asignarEnOrden(4, 3)) === '[0,1,2,null]', 'más exámenes que alumnos: el que sobra, de nadie');
+  ok(JSON.stringify(reasignar([0, 1, 2, 3], 1, 2, 6)) === '[0,2,3,4]', 'falta el segundo de la lista: se corrige uno y los siguientes se recolocan');
+  ok(JSON.stringify(reasignar([0, 1, 2, 3], 2, 3, 4)) === '[0,1,3,null]', 'al llegar al final de la lista, el que sobra queda sin nadie');
+  ok(JSON.stringify(reasignar([0, 1, 2, 3], 1, null, 4)) === '[0,null,2,3]', '«No corregir» uno no mueve a los demás');
+  ok(JSON.stringify(reasignar([0, 1, 5, 3], 1, 2, 6)) === '[0,2,5,3]', 'los que ya se tocaron a mano no se recolocan');
+}
+
+console.log('== Escáner con la cámara: cuándo dispara ==');
+{
+  const { diferenciaMedia, nitidez, detectorQuietud } = globalThis.LeerTrabajos;
+  ok(diferenciaMedia([10, 20, 30], [10, 20, 30]) === 0 && diferenciaMedia([0, 0], [10, 30]) === 20 && diferenciaMedia(null, [1]) === 255, 'diferencia media entre fotogramas');
+  const liso = new Uint8Array(100).fill(128), tablero = Uint8Array.from({ length: 100 }, (_, i) => ((i % 10) + Math.floor(i / 10)) % 2 ? 255 : 0);
+  ok(nitidez(liso, 10, 10) === 0 && nitidez(tablero, 10, 10) > 1000, 'nitidez: imagen lisa frente a bordes marcados');
+
+  const d = detectorQuietud({ muestras: 3 });
+  const serie = difs => difs.map(x => d.paso(x) ? 'F' : '.').join('');
+  ok(serie([1, 1, 1]) === '..F', 'la primera página: dispara al quedarse quieta');
+  ok(serie([1, 1, 1, 1, 1, 1]) === '......', 'la misma página, quieta: no repite');
+  ok(serie([40, 30, 6, 1, 1, 1]) === '.....F', 'pasar la página y esperar: dispara');
+  ok(serie([40, 1, 1, 8, 1, 1, 1]) === '......F', 'un temblor reinicia la cuenta');
+  ok(serie([6, 6, 1, 1, 1, 1]) === '......', 'un cambio pequeño (enfoque, luz) sin pasar página: no dispara');
+  d.paso(40); d.desarmar();
+  ok(serie([1, 1, 1, 1]) === '....', 'tras disparar a mano no repite la página');
+}
+
 console.log(fallos ? `\n${fallos} prueba(s) fallida(s)` : '\nTodas las pruebas de leer-trabajos pasan');
 process.exit(fallos ? 1 : 0);
