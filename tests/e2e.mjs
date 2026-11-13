@@ -452,6 +452,9 @@ console.log('== Una sola zona: grupo vacío, archivos sueltos, fotos sin nombre 
   await page.click('#btnCorregir');
   await page.waitForSelector('#btnConfirmarReparto', { timeout: 60000 });
   ok((await page.$$('.reparto-examen')).length === 2 && await page.inputValue('#repCaras') === '1' && await page.textContent('#btnConfirmarReparto') === 'Corregir 2', 'fotos sin QR ni nombres: una cara por examen, en el orden de la lista');
+  ok(await page.isDisabled('#btnConfirmarReparto'), 'sin tapar el nombre no deja corregir');
+  await page.check('#repSinTapar');
+  ok(await page.isEnabled('#btnConfirmarReparto'), 'salvo que el profe diga a sabiendas que se envíe sin tapar');
   await page.selectOption('select[aria-label="De quién es el examen 2"]', { label: 'Ana López García' });
   ok(await page.isDisabled('#btnConfirmarReparto') && (await page.textContent('#repResumen')).includes('más de un examen'), 'el mismo alumno en dos exámenes: avisa y no deja corregir');
   await page.click('text=es del examen anterior');
@@ -643,11 +646,12 @@ console.log('== Exámenes en papel: la pila escaneada sin QR ==');
   await page.selectOption('select[aria-label="De quién es el examen 2"]', { label: 'Marta Ruiz' });
   // Marcar el nombre en una cabecera: se tapa en todas
   const caja = await (await page.$('.reparto-cab')).boundingBox();
+  ok(await page.isDisabled('#btnConfirmarReparto'), 'antes de marcar el nombre no deja corregir');
   await page.mouse.move(caja.x + caja.width * 0.05, caja.y + caja.height * 0.1);
   await page.mouse.down();
   await page.mouse.move(caja.x + caja.width * 0.6, caja.y + caja.height * 0.5, { steps: 4 });
   await page.mouse.up();
-  ok((await page.$$('.reparto-tapa')).length === 3 && (await page.textContent('#repTapaAyuda')).includes('se tapa en la primera cara'), 'el nombre marcado en una cabecera se tapa en las tres');
+  ok((await page.$$('.reparto-tapa')).length === 3 && (await page.textContent('#repTapaAyuda')).includes('se tapa en la primera cara') && await page.isHidden('#repSinTaparLabel') && await page.isEnabled('#btnConfirmarReparto'), 'el nombre marcado en una cabecera se tapa en las tres, y ya deja corregir');
   await page.screenshot({ path: OUT + '9b-reparto.png', fullPage: true });
   await page.click('#btnConfirmarReparto');
   await page.waitForFunction(() => document.getElementById('progressText').textContent.includes('completada'), null, { timeout: 60000 });

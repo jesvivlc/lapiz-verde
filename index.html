@@ -647,7 +647,8 @@
     .reparto-opciones input[type=number] { width: 64px; padding: 6px; margin-left: 6px; }
     .reparto-lista { display: flex; flex-direction: column; gap: 8px; max-height: 52vh; overflow-y: auto; }
     .reparto-examen { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; padding: 8px; border: 1px solid var(--border); border-radius: 10px; }
-    .reparto-cab { position: relative; flex: 1 1 300px; max-width: 420px; cursor: crosshair; user-select: none; line-height: 0; }
+    .reparto-cab { position: relative; flex: 1 1 300px; max-width: 420px; cursor: crosshair; user-select: none; line-height: 0; touch-action: none; }
+    .reparto-sin-tapar { display: block; text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 13px; color: var(--text-muted); margin: 0; }
     .reparto-cab img { width: 100%; border-radius: 6px; border: 1px solid var(--border); pointer-events: none; }
     .reparto-tapa { position: absolute; background: rgba(15, 23, 42, .55); border: 1px dashed #fff; pointer-events: none; }
     .reparto-lado { flex: 1 1 200px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -1506,6 +1507,7 @@
 
   const MAX_ARCHIVOS_SOLTADOS = 3000;
   const MAX_MB_ESCANEO = 500;   // lo que se lee a la vez para buscar pegatinas QR
+  const MAX_PAGINAS_ESCANEO = 600;   // páginas de un escaneo: más no caben en la memoria del navegador
   async function archivosDeEntradas(entradas) {
     const salida = [];
     async function recorrer(entrada, base) {
@@ -2674,6 +2676,7 @@
       if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf') {
         // isEvalSupported: false → un PDF manipulado no puede ejecutar código (CVE-2024-4367)
         const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await f.arrayBuffer()), isEvalSupported: false }).promise;
+        if (paginas.length + pdf.numPages > MAX_PAGINAS_ESCANEO) { pdf.destroy(); throw new Error(`son más de ${MAX_PAGINAS_ESCANEO} páginas. Corrige la clase en dos veces.`); }
         for (let n = 1; n <= pdf.numPages; n++) {
           const pagina = await pdf.getPage(n);
           const base = pagina.getViewport({ scale: 1 });
@@ -2826,6 +2829,7 @@
       <div id="repResumen" class="resumen-emparejado"></div>
       <div id="repLista" class="reparto-lista"></div>
       <p class="resumen-ayuda" id="repTapaAyuda"></p>
+      <label class="reparto-sin-tapar" id="repSinTaparLabel"><input type="checkbox" id="repSinTapar"> Enviar sin tapar: en estos exámenes no se ve el nombre, o acepto que la IA lo vea</label>
       <div class="modal-actions">
         <button class="btn btn-secondary btn-sm" onclick="cerrarModal()">Cancelar</button>
         <button class="btn btn-primary btn-sm" id="btnConfirmarReparto">Corregir</button>
@@ -2843,8 +2847,10 @@
         cab.appendChild(t);
       });
       el('repTapaAyuda').innerHTML = tapa
-        ? 'Lo marcado se tapa en la primera cara de cada examen antes de enviarlo a la IA. <button type="button" class="enlace" id="repQuitarTapa">Quitar</button>'
-        : 'Para que la IA no vea el nombre, arrastra con el ratón sobre él en una cabecera: se tapa en la primera cara de todos los exámenes.';
+        ? 'Lo marcado se tapa en la primera cara de cada examen antes de enviarlo a la IA: comprueba que cubre el nombre en todas las cabeceras. Las demás caras no se tapan. <button type="button" class="enlace" id="repQuitarTapa">Quitar</button>'
+        : '<strong>Tapa el nombre:</strong> arrastra sobre él en una cabecera (con el ratón o con el dedo) y se tapará en la primera cara de todos los exámenes antes de enviarlos a la IA.';
+      el('repSinTaparLabel').classList.toggle('hidden', !!tapa);
+      if (examenes.length) resumen();
     };
     const resumen = () => {
       const con = asignados.filter(a => a !== null);
@@ -2860,7 +2866,7 @@
           (saldo < con.length ? ' <strong>No llegan para todos: se corregirá hasta agotar el saldo.</strong>' : '') + '</div>' : '');
       const btn = el('btnConfirmarReparto');
       btn.textContent = `Corregir ${con.length}`;
-      btn.disabled = !con.length || repetidos.length > 0 || largos > 0;
+      btn.disabled = !con.length || repetidos.length > 0 || largos > 0 || !(tapa || el('repSinTapar').checked);
     };
     const pintar = () => {
       lista.innerHTML = examenes.map((ex, k) => {
@@ -2876,7 +2882,7 @@
           </div></div>`;
       }).join('');
       pintarTapa();
-      resumen();
+      resumen();   // también con la pila vacía
     };
     const cortar = () => {
       const caras = parseInt(el('repCaras').value, 10);
@@ -2896,6 +2902,7 @@
 
     el('repCaras').addEventListener('input', cortar);
     el('repBlancas').addEventListener('change', cortar);
+    el('repSinTapar').addEventListener('change', resumen);
     el('repGirar').addEventListener('click', async e => {
       e.target.disabled = true;
       girado = !girado;
@@ -2918,7 +2925,7 @@
       pintar();
     });
     el('repTapaAyuda').addEventListener('click', e => { if (e.target.id === 'repQuitarTapa') { tapa = null; pintarTapa(); } });
-    // Marcar el nombre arrastrando sobre una cabecera (con el dedo no: es el gesto de desplazar la lista)
+    // Marcar el nombre arrastrando sobre una cabecera (con el dedo también: la lista se desplaza tocando fuera de la imagen)
     let inicio = null;
     const punto = (e, cab) => {
       const r = cab.getBoundingClientRect();
@@ -2926,7 +2933,7 @@
     };
     lista.addEventListener('pointerdown', e => {
       const cab = e.target.closest('.reparto-cab');
-      if (!cab || e.pointerType === 'touch') return;
+      if (!cab) return;
       inicio = { cab, ...punto(e, cab) };
       e.preventDefault();
     });
@@ -2940,6 +2947,7 @@
     });
     const soltar = () => { inicio = null; };
     lista.addEventListener('pointerup', soltar);
+    lista.addEventListener('pointercancel', soltar);
     lista.addEventListener('pointerleave', soltar);
 
     return new Promise(resolve => {
@@ -3056,15 +3064,23 @@
     } catch (e) {
       return showToast(e.name === 'NotAllowedError' ? 'No hay permiso para usar la cámara. Actívalo en el navegador y vuelve a pulsar.' : 'No se pudo abrir la cámara: ' + e.message, 'error');
     }
-    const video = document.getElementById('escanerVideo');
-    video.srcObject = escaner.stream;
-    await video.play().catch(() => {});
-    Object.assign(escaner, { paginas: [], previo: null, ocupado: false, detector: LeerTrabajos.detectorQuietud() });
-    document.getElementById('escaner').classList.remove('hidden');
-    pintarEscaner('Coloca la primera página');
-    navigator.wakeLock?.request('screen').then(b => { escaner.bloqueo = b; }).catch(() => {});
-    escaner.reloj = setInterval(escanerPaso, 120);
+    try {
+      const video = document.getElementById('escanerVideo');
+      video.srcObject = escaner.stream;
+      await video.play().catch(() => {});
+      Object.assign(escaner, { paginas: [], previo: null, ocupado: false, detector: LeerTrabajos.detectorQuietud() });
+      document.getElementById('escaner').classList.remove('hidden');
+      pintarEscaner('Coloca la primera página');
+      navigator.wakeLock?.request('screen').then(b => { escaner.bloqueo = b; }).catch(() => {});
+      escaner.reloj = setInterval(escanerPaso, 120);
+    } catch (e) {
+      escaner.paginas = [];
+      cerrarEscaner(false);   // que la cámara no se quede encendida
+      showToast('No se pudo abrir la cámara: ' + e.message, 'error');
+    }
   }
+  // Al salir de la página con el escáner abierto, la cámara se apaga
+  addEventListener('pagehide', () => escaner.stream?.getTracks().forEach(t => t.stop()));
 
   function escanerPaso() {
     const video = document.getElementById('escanerVideo');
@@ -3182,9 +3198,9 @@
           .hoja { break-after: page; padding: 0 2mm; }
           @media screen { .hoja { width: 186mm; margin: 12px auto; padding: 12mm; border: 1px solid #CBD5E1; } }
           header { display: flex; align-items: center; gap: 6mm; padding-bottom: 4mm; border-bottom: 0.3mm solid #0F172A; }
-          .quien { display: flex; align-items: center; gap: 3mm; width: 74mm; flex-shrink: 0; overflow: hidden; }
+          .quien { display: flex; align-items: center; gap: 3mm; width: 60mm; flex-shrink: 0; overflow: hidden; }
           .quien svg { width: 28mm; height: 28mm; flex-shrink: 0; }
-          .nombre { font-size: 11pt; font-weight: 600; line-height: 1.2; max-height: 26mm; overflow: hidden; }
+          .nombre { font-size: 10pt; font-weight: 600; line-height: 1.2; max-height: 24mm; overflow: hidden; overflow-wrap: anywhere; }
           .examen { min-width: 0; }
           .titulo { font-size: 14pt; font-weight: 700; overflow-wrap: anywhere; }
           .examen small { font-size: 9pt; color: #64748B; }
@@ -3192,7 +3208,7 @@
           .sin-pauta .pauta { display: none; }
         </style></head><body>
         <div class="aviso"><strong>Hojas de examen de ${esc(grupoActual.nombre)}</strong><br>
-          Una hoja por alumno, con su código. Repártelas con el examen: cada alumno escribe en la suya (o grápala encima de su examen).
+          Una hoja por alumno, con su código. Repártelas con el examen: cada alumno escribe en la suya (o grápala encima de su examen). Que no escriban su nombre en ninguna otra parte: el de la cabecera se tapa antes de enviarlo a la IA.
           Al recoger, la hoja con el código tiene que ser la primera de cada examen. Luego pasa toda la pila por la fotocopiadora
           y suelta el PDF en «Trabajos»: cada examen va solo a su alumno, en el orden que sea.<br>
           <label>Título <input type="text" maxlength="80" placeholder="Examen del tema 3" oninput="document.querySelectorAll('.titulo').forEach(t => t.textContent = this.value)"></label>
