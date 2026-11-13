@@ -312,6 +312,118 @@
   }
 
   /* ══════════════════════════════════════
+     Exámenes en papel: la pila escaneada de una vez y el escáner con la cámara
+     Aquí solo va la lógica (se prueba en Node); las imágenes las maneja index.html.
+  ══════════════════════════════════════ */
+
+  /**
+   * ¿Cara en blanco? `lum` son las luminancias (0-255) de la página reducida, por filas (w × h).
+   * No se miran los bordes (sombra del escáner, agujeros de la grapa) y se compara con el tono del papel,
+   * no con el blanco puro: lo que se transparenta de la otra cara es más claro que la tinta.
+   */
+  function paginaEnBlanco(lum, w, h) {
+    const mx = Math.round(w * 0.06), my = Math.round(h * 0.06);
+    const hist = new Uint32Array(256);
+    let n = 0;
+    for (let y = my; y < h - my; y++) for (let x = mx; x < w - mx; x++) { hist[lum[y * w + x]]++; n++; }
+    if (!n) return true;
+    let papel = 255;
+    for (let v = 255, acc = 0; v >= 0; v--) { acc += hist[v]; if (acc >= n / 2) { papel = v; break; } }
+    let tinta = 0;
+    for (let v = 0; v < papel - 40; v++) tinta += hist[v];
+    return tinta / n < 0.0004;   // con 900 px de ancho, una línea corta de texto ya pasa de aquí
+  }
+
+  /**
+   * Corta la pila en exámenes de `caras` páginas. `paginas` es [{ blanca }]; devuelve las posiciones
+   * (índices de `paginas`) de cada examen. Las caras en blanco no cuentan ni se corrigen, salvo que
+   * `ignorarBlancas` sea false. El último examen puede quedar corto (falta una hoja): se ve al revisar.
+   */
+  function cortarEscaneo(paginas, { caras = 1, ignorarBlancas = true } = {}) {
+    const n = Math.max(1, Math.floor(caras) || 1);
+    const utiles = paginas.map((p, i) => i).filter(i => !(ignorarBlancas && paginas[i].blanca));
+    const examenes = [];
+    for (let k = 0; k < utiles.length; k += n) examenes.push(utiles.slice(k, k + n));
+    return examenes;
+  }
+
+  /** Caras por examen más probable: las páginas útiles entre los alumnos de la lista */
+  function carasProbables(numPaginas, numAlumnos, max = 10) {
+    if (!numAlumnos || numPaginas <= numAlumnos) return 1;
+    return Math.min(max, Math.max(1, Math.round(numPaginas / numAlumnos)));
+  }
+
+  /** Parte un examen en dos por la página `pos` (índice de página), o lo une al anterior si `pos` es su primera página */
+  function moverCorte(examenes, pos) {
+    const k = examenes.findIndex(e => e.includes(pos));
+    if (k < 0) return examenes;
+    const e = examenes[k], j = e.indexOf(pos);
+    if (j > 0) return [...examenes.slice(0, k), e.slice(0, j), e.slice(j), ...examenes.slice(k + 1)];
+    if (k === 0) return examenes;
+    return [...examenes.slice(0, k - 1), [...examenes[k - 1], ...e], ...examenes.slice(k + 1)];
+  }
+
+  /** De quién es cada examen si la pila va en el orden de la lista: el examen k, del alumno k (null = nadie) */
+  function asignarEnOrden(numExamenes, numAlumnos) {
+    return Array.from({ length: numExamenes }, (_, k) => k < numAlumnos ? k : null);
+  }
+
+  /**
+   * El profe cambia de quién es el examen `k`. Si falta alguien en clase, basta corregir el primer examen
+   * descolocado: los siguientes que seguían en orden se recolocan solos. Los que ya se tocaron a mano, no.
+   */
+  function reasignar(asignados, k, nuevo, numAlumnos) {
+    const salida = asignados.slice(), viejo = asignados[k];
+    salida[k] = nuevo;
+    if (viejo === null || viejo === undefined || nuevo === null) return salida;
+    for (let r = k + 1; r < asignados.length && asignados[r] === viejo + (r - k); r++) {
+      salida[r] = nuevo + (r - k) < numAlumnos ? nuevo + (r - k) : null;
+    }
+    return salida;
+  }
+
+  /** Diferencia media (0-255) entre dos fotogramas reducidos de la cámara */
+  function diferenciaMedia(a, b) {
+    if (!a || !b || a.length !== b.length || !a.length) return 255;
+    let t = 0;
+    for (let i = 0; i < a.length; i++) t += Math.abs(a[i] - b[i]);
+    return t / a.length;
+  }
+
+  /** Nitidez de un fotograma (varianza del laplaciano): entre varios seguidos, el más alto es el mejor enfocado */
+  function nitidez(lum, w, h) {
+    let s = 0, s2 = 0, n = 0;
+    for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      const l = 4 * lum[i] - lum[i - 1] - lum[i + 1] - lum[i - w] - lum[i + w];
+      s += l; s2 += l * l; n++;
+    }
+    return n ? s2 / n - (s / n) ** 2 : 0;
+  }
+
+  /**
+   * Cuándo disparar la foto con el móvil fijo: después de que algo se mueva (pasar la página) y la imagen
+   * lleve `muestras` fotogramas seguidos quieta. No vuelve a disparar hasta que haya otro movimiento:
+   * dos páginas del mismo examen se parecen demasiado para distinguirlas por la imagen.
+   */
+  function detectorQuietud({ movimiento = 14, quieto = 4, muestras = 5 } = {}) {
+    let seguidas = 0, armado = true;
+    return {
+      /** `dif`: diferenciaMedia con el fotograma anterior. Devuelve true cuando toca disparar */
+      paso(dif) {
+        if (dif > movimiento) { armado = true; seguidas = 0; return false; }
+        if (dif > quieto) { seguidas = 0; return false; }
+        if (!armado || ++seguidas < muestras) return false;
+        armado = false; seguidas = 0;
+        return true;
+      },
+      /** Tras un disparo a mano: no repetir la misma página */
+      desarmar() { armado = false; seguidas = 0; },
+      get armado() { return armado; },
+    };
+  }
+
+  /* ══════════════════════════════════════
      Texto de documentos (XML dentro de un ZIP)
      El alumno controla el documento: nada de expresiones regulares que puedan atascarse.
      El XML se recorre una sola vez buscando «<» y «>» con indexOf.
@@ -500,6 +612,7 @@
   global.LeerTrabajos = {
     norm, palabras, tipoArchivo, emparejarEntregas, resolverEntregas, pareceNombre, partirNombre, nombresDeRutas,
     filtrarPorTarea, tareasDeTeams, columnasAlumnos,
+    paginaEnBlanco, cortarEscaneo, carasProbables, moverCorte, asignarEnOrden, reasignar, diferenciaMedia, nitidez, detectorQuietud,
     textoDeDocx, textoDePptx, textoDeOdf, textoDeHtml, anonimizar, MARCA,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

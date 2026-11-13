@@ -290,7 +290,7 @@ console.log('== ZIP de Moodle/Aules + Excel, y quedarse sin créditos ==');
     return parseExcel(new File([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], 'teams.xlsx'));
   });
   ok(JSON.stringify(deTeams) === JSON.stringify([{ nombre: 'Ana', apellidos: 'López Gil', email: 'ana@x.es' }]), 'Excel de Teams en inglés: nombre, apellidos y correo');
-  ok(await page.$eval('#trabajosZone + .ayuda-bajar summary', e => e.textContent.includes('todas las entregas')), 'ayuda para bajar las entregas de Teams, Aules y Classroom');
+  ok(await page.$eval('#trabajosZone ~ .ayuda-bajar summary', e => e.textContent.includes('todas las entregas')), 'ayuda para bajar las entregas de Teams, Aules y Classroom');
   await page.fill('#nombreTarea', 'Redacción');
   await page.fill('#rubrica', '- x (10 pts)');
   await page.setInputFiles('#trabajosFile', OUT + 'moodle.zip');
@@ -435,8 +435,10 @@ console.log('== Una sola zona: grupo vacío, archivos sueltos, fotos sin nombre 
   await page.selectOption('#selTarea', 't-1');
   await page.setInputFiles('#trabajosFile', [{ name: 'escaneo-sin-pegatinas.pdf', mimeType: 'application/pdf', buffer: await (async () => { const g = await (await browser.newContext()).newPage(); await g.setContent('<p>Libretas sin pegatina</p>'); return g.pdf(); })() }]);
   await page.click('#btnCorregir');
-  await page.waitForFunction(() => /ninguna pegatina QR/.test(document.getElementById('toast').textContent), null, { timeout: 60000 });
-  ok(correcciones.length === 0 && await page.isHidden('#btnConfirmarEmparejado').catch(() => true), 'PDF sin pegatinas ni nombres: avisa y no ofrece mandarlo a nadie');
+  await page.waitForSelector('#btnConfirmarReparto', { timeout: 60000 });
+  ok((await page.textContent('#modalContenido')).includes('¿De quién es cada examen?') && (await page.$$('.reparto-cab img')).length === 1, 'PDF sin QR ni nombres: enseña la cabecera y pregunta de quién es');
+  await page.click('#modalContenido >> text=Cancelar');
+  ok(correcciones.length === 0, 'al cancelar no se corrige nada');
 
   // Fotos del móvil sin nombre ni pegatina: el profe dice de quién es cada una
   correcciones.length = 0;
@@ -448,12 +450,14 @@ console.log('== Una sola zona: grupo vacío, archivos sueltos, fotos sin nombre 
     { name: 'IMG_2042.jpg', mimeType: 'image/png', buffer: fs.readFileSync(OUT + 'foto-grande.png') },
   ]);
   await page.click('#btnCorregir');
-  await page.waitForSelector('#btnConfirmarEmparejado', { timeout: 60000 });
-  const r3 = await page.textContent('#modalContenido');
-  ok(r3.includes('Revisa de quién son (2)') && r3.includes('IMG_2041.jpg') && await page.textContent('#btnConfirmarEmparejado') === 'Corregir 0', 'sin pegatinas ni nombres: las dos fotos, para elegir; nada se corrige solo');
-  await page.selectOption('select[aria-label="De quién es IMG_2041.jpg"]', { label: 'Luis Pérez' });
-  await page.selectOption('select[aria-label="De quién es IMG_2042.jpg"]', { label: 'Luis Pérez' });
-  await page.click('#btnConfirmarEmparejado');
+  await page.waitForSelector('#btnConfirmarReparto', { timeout: 60000 });
+  ok((await page.$$('.reparto-examen')).length === 2 && await page.inputValue('#repCaras') === '1' && await page.textContent('#btnConfirmarReparto') === 'Corregir 2', 'fotos sin QR ni nombres: una cara por examen, en el orden de la lista');
+  await page.selectOption('select[aria-label="De quién es el examen 2"]', { label: 'Ana López García' });
+  ok(await page.isDisabled('#btnConfirmarReparto') && (await page.textContent('#repResumen')).includes('más de un examen'), 'el mismo alumno en dos exámenes: avisa y no deja corregir');
+  await page.click('text=es del examen anterior');
+  ok((await page.$$('.reparto-examen')).length === 1 && (await page.textContent('.reparto-lado small')).startsWith('2 caras'), 'la segunda foto se une al examen anterior');
+  await page.selectOption('select[aria-label="De quién es el examen 1"]', { label: 'Luis Pérez' });
+  await page.click('#btnConfirmarReparto');
   await page.waitForSelector('#btnCorregir:not([disabled])', { timeout: 20000 });
   await page.waitForTimeout(300);
   ok(correcciones.length === 1 && correcciones[0].archivos.length === 2, 'las dos fotos, a Luis, en una sola corrección');
@@ -607,6 +611,115 @@ console.log('== Escaneo de libretas con pegatinas QR ==');
   ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
 }
 
+console.log('== Exámenes en papel: la pila escaneada sin QR ==');
+{
+  correcciones.length = 0; creditosApi = 10; db.entregas = [];
+  // Pila de 3 exámenes de 2 caras, con un dorso en blanco en medio y sin el examen de Luis (no vino a clase)
+  const gen = await (await browser.newContext()).newPage();
+  const pag = (cont) => `<div style="box-sizing:border-box;height:250mm;page-break-after:always;padding:15mm;font:22px serif">${cont}</div>`;
+  await gen.setContent('<html><body style="margin:0">' +
+    pag('<b>Nombre: Ana</b><p>Pregunta 1. Respuesta de Ana.</p>') + pag('<p>Segunda cara de Ana, con más respuestas.</p>') + pag('') +
+    pag('<b>Nombre: Marta</b><p>Pregunta 1. Respuesta de Marta.</p>') + pag('<p>Segunda cara de Marta, con más respuestas.</p>') +
+    pag('<b>Nombre: Sara</b><p>Pregunta 1. Respuesta de Sara.</p>') + pag('<p>Segunda cara de Sara, con más respuestas.</p>') + '</body></html>');
+  fs.writeFileSync(OUT + 'pila.pdf', await gen.pdf({ format: 'A4' }));
+
+  const { page, errores } = await prepararPagina(browser, { conSesion: true });
+  await page.waitForSelector('#app:not(.hidden)');
+  await page.selectOption('#selGrupo', 'g-1');
+  await page.waitForFunction(() => !document.getElementById('selTarea').disabled);
+  await page.selectOption('#selTarea', 't-1');
+  await page.setInputFiles('#trabajosFile', OUT + 'pila.pdf');
+  await page.click('#btnCorregir');
+  await page.waitForSelector('#btnConfirmarReparto', { timeout: 60000 });
+  ok((await page.textContent('.reparto-opciones')).includes('No contar la cara en blanco'), 'detecta el dorso en blanco');
+  ok(await page.inputValue('#repCaras') === '2' && (await page.$$('.reparto-examen')).length === 3, '6 caras útiles y 4 alumnos: propone 2 caras por examen → 3 exámenes');
+  const quien = () => page.$$eval('select[data-examen]', ss => ss.map(x => x.selectedOptions[0].textContent.split(' ')[0]).join(','));
+  ok(await quien() === 'Ana,Luis,Marta', 'en el orden de la lista: ' + await quien());
+  await page.selectOption('select[aria-label="De quién es el examen 2"]', { label: 'Marta Ruiz' });
+  ok(await quien() === 'Ana,Marta,Sara', 'falta Luis: se corrige el segundo y el tercero se recoloca solo → ' + await quien());
+  await page.fill('#repCaras', '3');
+  ok((await page.$$('.reparto-examen')).length === 2, 'con 3 caras por examen salen 2 exámenes');
+  await page.fill('#repCaras', '2');
+  await page.selectOption('select[aria-label="De quién es el examen 2"]', { label: 'Marta Ruiz' });
+  // Marcar el nombre en una cabecera: se tapa en todas
+  const caja = await (await page.$('.reparto-cab')).boundingBox();
+  await page.mouse.move(caja.x + caja.width * 0.05, caja.y + caja.height * 0.1);
+  await page.mouse.down();
+  await page.mouse.move(caja.x + caja.width * 0.6, caja.y + caja.height * 0.5, { steps: 4 });
+  await page.mouse.up();
+  ok((await page.$$('.reparto-tapa')).length === 3 && (await page.textContent('#repTapaAyuda')).includes('se tapa en la primera cara'), 'el nombre marcado en una cabecera se tapa en las tres');
+  await page.screenshot({ path: OUT + '9b-reparto.png', fullPage: true });
+  await page.click('#btnConfirmarReparto');
+  await page.waitForFunction(() => document.getElementById('progressText').textContent.includes('completada'), null, { timeout: 60000 });
+  const corregidos = await page.evaluate(() => cards.filter(c => c.result).map(c => c.alumno.nombre.split(' ')[0]).sort().join(','));
+  ok(corregidos === 'Ana,Marta,Sara' && correcciones.length === 3 && correcciones.every(c => c.archivos.length === 2), `Ana, Marta y Sara, con sus 2 caras cada una; el dorso en blanco no se envía (${corregidos})`);
+  ok((await page.textContent('#statsBar')).includes('1 sin entrega'), 'Luis sale como sin entrega');
+  ok(!JSON.stringify(correcciones).includes('Ana López'), 'el nombre del alumno no va en la petición');
+  const tapado = await page.evaluate(async () => {
+    const c = document.createElement('canvas'); c.width = 400; c.height = 600;
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 400, 300); ctx.fillStyle = '#fff'; ctx.fillRect(0, 300, 400, 300);
+    const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+    const leer = async (b) => { const bmp = await createImageBitmap(b); const d = document.createElement('canvas'); d.width = bmp.width; d.height = bmp.height;
+      const x = d.getContext('2d'); x.drawImage(bmp, 0, 0); return (px, py) => x.getImageData(px, py, 1, 1).data[0]; };
+    const t = await leer(await transformarPagina(blob, { girar: false, tapa: { x: 0.25, y: 0.1, w: 0.25, h: 0.1 } }));
+    const g = await leer(await transformarPagina(blob, { girar: true, tapa: null }));
+    return { dentro: t(150, 90), fuera: t(350, 90), giradoArriba: g(200, 100), giradoAbajo: g(200, 500), igual: await transformarPagina(blob, {}) === blob };
+  });
+  ok(tapado.dentro > 240 && tapado.fuera < 15, 'la zona marcada va en blanco a la IA; el resto de la página, intacto');
+  ok(tapado.giradoArriba > 240 && tapado.giradoAbajo < 15 && tapado.igual, '«Está del revés» gira la página; sin cambios, se envía tal cual');
+  ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
+}
+
+console.log('== Escáner con la cámara ==');
+{
+  correcciones.length = 0;
+  const { page, errores } = await prepararPagina(browser, { conSesion: true });
+  await page.waitForSelector('#app:not(.hidden)');
+  ok(await page.isVisible('#btnEscaner'), 'el botón «Escanear con la cámara» está bajo la zona de trabajos');
+  // Cámara simulada: un lienzo que hace de mesa con la página encima
+  await page.evaluate(() => {
+    const c = document.createElement('canvas'); c.width = 640; c.height = 480;
+    const ctx = c.getContext('2d');
+    let actual = '';
+    window.ponerPagina = (texto) => { actual = texto; };
+    setInterval(() => {
+      ctx.fillStyle = actual === 'MANO' ? '#333' : '#fff'; ctx.fillRect(0, 0, 640, 480);
+      ctx.fillStyle = '#000'; ctx.font = '48px sans-serif'; ctx.fillText(actual, 40, 200);
+      ctx.fillStyle = '#fefefe'; ctx.fillRect(Math.random() * 2, 470, 2, 2);   // que siempre haya fotograma nuevo
+    }, 40);
+    ponerPagina('Página 1 del examen');
+    navigator.mediaDevices.getUserMedia = async () => c.captureStream(25);
+  });
+  await page.click('#btnEscaner');
+  await page.waitForFunction(() => document.getElementById('escanerCuenta').textContent === '1 página', null, { timeout: 15000 });
+  ok(await page.isVisible('#escaner') && await page.isVisible('#escanerMini'), 'la primera página se fotografía sola al quedarse quieta');
+  await page.waitForTimeout(1500);
+  ok(await page.textContent('#escanerCuenta') === '1 página', 'la misma página quieta no se repite');
+  await page.evaluate(() => ponerPagina('MANO'));
+  await page.waitForTimeout(300);
+  await page.evaluate(() => ponerPagina('Página 2 del examen'));
+  await page.waitForFunction(() => document.getElementById('escanerCuenta').textContent === '2 páginas', null, { timeout: 15000 });
+  ok(true, 'al pasar la página y dejarla quieta, hace la segunda foto');
+  await page.click('.escaner-disparo');
+  await page.waitForFunction(() => document.getElementById('escanerCuenta').textContent === '3 páginas', null, { timeout: 5000 });
+  await page.waitForTimeout(1200);
+  ok(await page.textContent('#escanerCuenta') === '3 páginas', 'el botón redondo hace la foto a mano, y no se repite sola');
+  await page.click('#escanerBorrar');
+  ok(await page.textContent('#escanerListo') === 'Listo (2)', '«Borrar la última» quita la foto de más');
+  await page.screenshot({ path: OUT + '9c-escaner.png' });
+  await page.click('#escanerListo');
+  const fuera = await page.evaluate(() => ({ oculto: document.getElementById('escaner').classList.contains('hidden'), n: trabajos.length, nombres: trabajos.map(t => t.ruta).join(), vivo: !!escaner.stream }));
+  ok(fuera.oculto && fuera.n === 2 && fuera.nombres === 'escaner-001.jpg,escaner-002.jpg' && !fuera.vivo, 'al terminar, las 2 páginas quedan en «Trabajos» y la cámara se apaga');
+  await page.selectOption('#selGrupo', 'g-1');
+  await page.waitForFunction(() => !document.getElementById('selTarea').disabled);
+  await page.selectOption('#selTarea', 't-1');
+  await page.click('#btnCorregir');
+  await page.waitForSelector('#btnConfirmarReparto', { timeout: 60000 });
+  ok((await page.$$('.reparto-examen')).length === 2, 'y al corregir pasan por el mismo reparto que la pila escaneada');
+  await page.click('#modalContenido >> text=Cancelar');
+  ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
+}
+
 console.log('== Cuaderno: pegatinas QR y buzón ==');
 {
   patches.length = 0;
@@ -621,6 +734,13 @@ console.log('== Cuaderno: pegatinas QR y buzón ==');
   ok((await popup.textContent('.hoja')).includes('Ana López García'), 'con el nombre completo');
   await popup.screenshot({ path: OUT + '10-pegatinas.png', fullPage: true });
   await popup.close();
+  const [hojas] = await Promise.all([ctx.waitForEvent('page'), page.click('button:has-text("📝 Hojas de examen con QR")')]);
+  await hojas.waitForSelector('.hoja svg', { timeout: 15000 });
+  await hojas.fill('.aviso input[type=text]', 'Examen del tema 3');
+  ok((await hojas.$$('.hoja')).length === 4 && (await hojas.$$eval('.titulo', ts => ts.every(t => t.textContent === 'Examen del tema 3'))), 'una hoja de examen con QR por alumno, con el título que se escriba');
+  ok((await hojas.textContent('.hoja')).includes('Ana López García'), 'con el nombre junto al QR');
+  await hojas.screenshot({ path: OUT + '10b-hojas-examen.png' });
+  await hojas.close();
 
   ok(await page.isHidden('#btnBuzon'), 'el buzón no se ofrece hasta tener un dominio neutro');
   ok(errores.length === 0, 'sin errores de JS' + (errores.length ? ': ' + errores.join(' | ') : ''));
